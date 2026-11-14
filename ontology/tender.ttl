@@ -7,7 +7,7 @@
 <https://github.com/jningc/tender-lint/ontology> a owl:Ontology ;
     rdfs:label "招标文件核对本体"@zh ;
     rdfs:comment "只建模「招标文件里可以核对的东西」：条款、要求、判定、出处。不建模投标人内部流程。"@zh ;
-    owl:versionInfo "0.1" .
+    owl:versionInfo "0.2" .
 
 ############################################################
 # 类：文档结构（文件 → 章 → 条款 → 出处）
@@ -101,7 +101,17 @@ tl:EvaluationMethod a owl:Class ;
 
 tl:Verdict a owl:Class ;
     rdfs:label "判定"@zh ;
-    rdfs:comment "三值：满足 / 不满足 / 人工看。人工看表示证据不足，不是第四种结论。"@zh .
+    rdfs:comment "四值：满足 / 不满足 / 人工看 / 无须提供（见 tl:VerdictKind）。人工看表示证据不足，不是第五种结论；无须提供表示招标方代查或本项目不收。"@zh .
+
+tl:VerdictKind a owl:Class ;
+    rdfs:label "判定取值"@zh ;
+    rdfs:comment "判定只能取这四个值，由 tl:verdictKind 指过去；与 tender/contracts.py 的 Verdict 逐字一致。"@zh ;
+    owl:oneOf ( "满足" "不满足" "人工看" "无须提供" ) .
+
+tl:BondKind a owl:Class ;
+    rdfs:label "保证金种类"@zh ;
+    rdfs:comment "投标 / 履约 / 质量。三类共用 tl:Bond，靠 tl:bondKind 区分——投标保证金不能当履约保证金用。"@zh ;
+    owl:oneOf ( "投标" "履约" "质量" ) .
 
 tl:Evidence a owl:Class ;
     rdfs:label "证据集"@zh ;
@@ -121,7 +131,9 @@ tl:hasClause a owl:ObjectProperty ;
 
 tl:cites a owl:ObjectProperty ;
     rdfs:label "出处为"@zh ;
-    rdfs:domain tl:Clause ; rdfs:range tl:PageReference .
+    rdfs:comment "条款、证据、预算、保证金都能指到原件页码——所以 domain 是并集，不是只有 Clause。"@zh ;
+    rdfs:domain [ owl:unionOf ( tl:Clause tl:Evidence tl:Budget tl:Bond ) ] ;
+    rdfs:range tl:PageReference .
 
 tl:hasEvidence a owl:ObjectProperty ;
     rdfs:label "由证据支撑"@zh ;
@@ -129,7 +141,9 @@ tl:hasEvidence a owl:ObjectProperty ;
 
 tl:hasVerdict a owl:ObjectProperty ;
     rdfs:label "判定为"@zh ;
-    rdfs:domain tl:Requirement ; rdfs:range tl:Verdict .
+    rdfs:comment "能下判定的不只是 Requirement：废标条件（Clause 子类）和保证金（Bond）都要能挂判定。"@zh ;
+    rdfs:domain [ owl:unionOf ( tl:Clause tl:Bond tl:Budget ) ] ;
+    rdfs:range tl:Verdict .
 
 tl:hasPackage a owl:ObjectProperty ;
     rdfs:label "含采购包"@zh ;
@@ -186,3 +200,25 @@ tl:docVersion a owl:DatatypeProperty ;
 
 tl:note a owl:DatatypeProperty ;
     rdfs:label "备注"@zh ; rdfs:range xsd:string .
+
+tl:bbox a owl:DatatypeProperty ;
+    rdfs:label "条款级框"@zh ;
+    rdfs:comment "四个数 [x1, y1, x2, y2]，PDF 用户坐标。只有页号没有框，定位不到条款，按规矩不算正式出处。"@zh ;
+    rdfs:domain tl:PageReference ;
+    rdfs:range xsd:string .
+
+tl:verdictKind a owl:DatatypeProperty ;
+    rdfs:label "判定取值"@zh ;
+    rdfs:domain tl:Verdict ;
+    rdfs:range tl:VerdictKind .
+
+tl:bondKind a owl:DatatypeProperty ;
+    rdfs:label "保证金种类"@zh ;
+    rdfs:domain tl:Bond ;
+    rdfs:range tl:BondKind .
+
+tl:quote a owl:DatatypeProperty ;
+    rdfs:label "原文摘录"@zh ;
+    rdfs:comment "证据要能回查：校验段拿它跟 bbox 内的原文比对。只有页码没有原文，等于没有证据。"@zh ;
+    rdfs:domain tl:Evidence ;
+    rdfs:range xsd:string .

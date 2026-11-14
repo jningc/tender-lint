@@ -56,9 +56,11 @@ inst:certSupervisor a tl:Certificate ;
 
 inst:vSatisfied a tl:Verdict ;
     tl:note "满足" ;
+    tl:verdictKind "满足" ;
     tl:hasEvidence inst:evCivil .
 
 inst:evCivil a tl:Evidence ;
+    tl:quote "投标人应具备建设行政主管部门颁发的市政公用工程专业资质乙级及以上监理资质" ;
     tl:cites inst:page4 , inst:page25 .
 
 ############################################################
@@ -67,17 +69,24 @@ inst:evCivil a tl:Evidence ;
 
 inst:bidBond a tl:Bond ;
     tl:note "投标保证金" ;
+    tl:bondKind "投标" ;
     tl:amountYuan 8000 ;               # 01 包 8000 元
     tl:cites inst:page8 ;
     tl:belongsTo inst:pkg01 .
 
 inst:perfBond a tl:Bond ;
     tl:note "履约保证金：原文只在投标书模板里一句「按招标文件要求提交」，无金额比例" ;
+    tl:bondKind "履约" ;
     tl:cites inst:page83 ;
     tl:hasVerdict inst:vManual .
 
 inst:vManual a tl:Verdict ;
-    tl:note "人工看（证据不足，不猜）" .
+    tl:note "人工看（证据不足，不猜）" ;
+    tl:verdictKind "人工看" .
+
+inst:vNotRequired a tl:Verdict ;
+    tl:note "无须提供（本项目不收保证金 / 招标方代查时用这个值）" ;
+    tl:verdictKind "无须提供" .
 
 inst:validity a tl:Requirement ;
     tl:clauseText "投标有效期自提交投标文件的截止之日起算 90 日历天" ;
@@ -92,3 +101,18 @@ inst:deadlineBid a tl:Deadline ;
 inst:deadlineDecrypt a tl:Deadline ;
     tl:note "解密时间 30 分钟" ;
     tl:cites inst:page8 .
+
+############################################################
+# 条款级出处与形式要求（bbox 的样板）
+############################################################
+
+inst:refNote1 a tl:PageReference ;
+    tl:pageNumber 8 ;
+    tl:bbox "[65.8, 377.1, 562.2, 696.5]" ;   # p8 注1，高 319pt，条款级
+    tl:note "注1 保证金交纳形式；同页 12.1 金额那一块是整页框，不算定位" .
+
+inst:bondForm a tl:Requirement ;
+    tl:clauseText "投标保证金可采用下列形式之一：(1) 保函（推荐）(2) 支票 (3) 汇款" ;
+    tl:cites inst:refNote1 .
+
+
