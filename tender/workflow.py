@@ -4,7 +4,9 @@
 检索范围写死在节点里，模型不能改去搜哪一章。
 """
 
+import os
 import re
+import threading
 import time
 from contextvars import ContextVar
 from pathlib import Path
@@ -33,6 +35,25 @@ _REF_HINT = re.compile(r"(前附表|资料表|详见第|见第.{0,8}章|按第.{
 _STAR_RE = re.compile(r"[★▲＊*]")
 # 网页核对时由 run_check 设上；命令行不设，_emit 直接返回
 _progress_cb: ContextVar = ContextVar("tender_progress", default=None)
+
+# 进程级 LLM 并发闸：表内并发 × 文档级并发会叠乘，超了服务商的并发额度就整份失败。
+# deepseek 的额度跟余额挂钩（曾报「concurrency is 5, limit 5」），默认压到 4，可用
+# TENDER_LLM_CONCURRENCY 调。
+_llm_sem: threading.Semaphore | None = None
+_llm_sem_lock = threading.Lock()
+
+
+def _semaphore() -> threading.Semaphore:
+    global _llm_sem
+    if _llm_sem is None:
+        with _llm_sem_lock:
+            if _llm_sem is None:
+                try:
+                    limit = max(1, int(os.environ.get("TENDER_LLM_CONCURRENCY", "4")))
+                except ValueError:
+                    limit = 4
+                _llm_sem = threading.Semaphore(limit)
+    return _llm_sem
 
 
 def _emit(stage: str, state: str, detail: str = "", **payload) -> None:
@@ -107,7 +128,8 @@ def _extract(schema, system: str, hits: list[dict], extra: str = ""):
     last = None
     for attempt in range(3):
         try:
-            return llm.invoke(prompt)
+            with _semaphore():  # 卡片级限流：并发到顶就排队，不直接 429
+                return llm.invoke(prompt)
         except Exception as exc:  # 网络/限流/结构化输出偶发失败
             last = exc
             if attempt == 2:

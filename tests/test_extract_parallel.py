@@ -63,3 +63,20 @@ def test_workers_env(monkeypatch):
     assert ex._default_workers() == 1
     monkeypatch.setenv("TENDER_MAX_WORKERS", "abc")
     assert ex._default_workers() == 6
+
+
+def test_llm_concurrency_gate(monkeypatch):
+    """LLM 并发默认 4，可用环境变量调；没设或写错都回 4。"""
+    import tender.workflow as wf
+
+    monkeypatch.setattr(wf, "_llm_sem", None)
+    monkeypatch.delenv("TENDER_LLM_CONCURRENCY", raising=False)
+    assert wf._semaphore()._value == 4
+
+    monkeypatch.setattr(wf, "_llm_sem", None)
+    monkeypatch.setenv("TENDER_LLM_CONCURRENCY", "2")
+    assert wf._semaphore()._value == 2
+
+    monkeypatch.setattr(wf, "_llm_sem", None)
+    monkeypatch.setenv("TENDER_LLM_CONCURRENCY", "abc")
+    assert wf._semaphore()._value == 4
