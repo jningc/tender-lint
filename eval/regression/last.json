@@ -1,8 +1,8 @@
 {
   "engine": "v2",
   "repeats": 3,
-  "at": "20261115-201053",
-  "duration_s": 146.3,
+  "at": "20261115-202011",
+  "duration_s": 160.2,
   "docs": [
     {
       "doc": "beijing_road",
@@ -41,7 +41,7 @@
         "covered_pages_median": 0,
         "star_rows_median": 0
       },
-      "rows_median": 57
+      "rows_median": 59
     },
     {
       "doc": "chongzuo_green",
@@ -50,40 +50,42 @@
         "cz-bond": "hit",
         "cz-cap": "miss",
         "cz-format-bid-sheet": "hit",
-        "cz-neg-perf-bond": "violated",
+        "cz-neg-perf-bond": "hit",
         "cz-perf-bond": "hit",
         "cz-price": "hit"
       },
-      "flaky": [],
+      "flaky": [
+        "cz-cap"
+      ],
       "positive": {
         "hit": 4,
         "total": 5
       },
       "positive_stable": {
         "hit": 4,
-        "total": 5
+        "total": 4
       },
       "negative": {
-        "hit": 0,
+        "hit": 1,
         "total": 1
       },
       "negative_stable": {
-        "hit": 0,
+        "hit": 1,
         "total": 1
       },
-      "violated": 1,
+      "violated": 0,
       "markers": {
         "markers_total": 30,
         "covered_pages_median": 1,
-        "star_rows_median": 12
+        "star_rows_median": 18
       },
-      "rows_median": 62
+      "rows_median": 70
     },
     {
       "doc": "wenling_video",
       "runs": 3,
       "questions": {
-        "wl-bond": "unstable",
+        "wl-bond": "hit",
         "wl-cap": "hit",
         "wl-neg-perf-bond": "hit",
         "wl-perf-bond": "hit",
@@ -91,16 +93,15 @@
         "wl-validity": "hit"
       },
       "flaky": [
-        "wl-bond",
         "wl-validity"
       ],
       "positive": {
-        "hit": 4,
+        "hit": 5,
         "total": 5
       },
       "positive_stable": {
-        "hit": 3,
-        "total": 3
+        "hit": 4,
+        "total": 4
       },
       "negative": {
         "hit": 1,
@@ -116,23 +117,22 @@
         "covered_pages_median": 1,
         "star_rows_median": 1
       },
-      "rows_median": 83
+      "rows_median": 79
     }
   ],
   "totals": {
-    "pos_hit": 15,
+    "pos_hit": 16,
     "pos_total": 18,
-    "pos_stable_hit": 14,
+    "pos_stable_hit": 15,
     "pos_stable_total": 16,
-    "neg_hit": 2,
+    "neg_hit": 3,
     "neg_total": 3,
-    "neg_stable_hit": 2,
+    "neg_stable_hit": 3,
     "neg_stable_total": 3,
-    "violated": 1,
+    "violated": 0,
     "flaky": 2
   },
   "markers": {
     "covered_pages": 2
-  },
-  "recomputed": "分母按每份文档自己的题重算（原实现误用了全部 18 题）"
+  }
 }

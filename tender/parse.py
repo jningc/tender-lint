@@ -81,3 +81,12 @@ def page_count(pdf_path) -> int:
     n = doc.page_count
     doc.close()
     return n
+
+
+def page_texts(pdf_path) -> dict[int, str]:
+    """{页码: 该页纯文本}。校验段要比对原文，但不想要整份 blocks，所以单独给一个轻的。"""
+    doc = fitz.open(pdf_path)
+    try:
+        return {i + 1: doc[i].get_text() for i in range(doc.page_count)}
+    finally:
+        doc.close()

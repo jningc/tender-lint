@@ -1,0 +1,63 @@
+{
+  "_说明": "三个已知幻觉案例。校验段必须把它们拦下来；tests/test_verify_stage.py 逐条跑。",
+  "_format": "clause/finding 是构造出来的条目（不是模型输出），expect_failed 指应当失败的检查项",
+  "cases": [
+    {
+      "id": "perf-bond-in-feibiao",
+      "doc": "chongzuo_green",
+      "why": "履约保证金是合同约束，v1/v2 都把它塞进过崇左的废标表（p26 前附表 35）",
+      "clause": {
+        "id": "chongzuo_green:feibiao:014",
+        "type": "废标",
+        "text": "履约保证金：中标金额的5%",
+        "evidence": {
+          "page": 26,
+          "bbox": [47.0, 37.3, 548.2, 804.3],
+          "text": "履约保证金金额为中标金额的5 %（注：履约保证金不超过5%）",
+          "chapter": "第三章投标人须知 前附表",
+          "clause": "35 履约保证金金额"
+        }
+      },
+      "finding": { "table": "废标对照", "verdict": "人工看" },
+      "expect_failed": "table_exclusive"
+    },
+    {
+      "id": "bond-amount-wrong-page",
+      "doc": "beijing_road",
+      "why": "金额在 p8 的资料表 12.1；p17 正文只说「按资料表规定的金额」，引 p17 就没有金额可查",
+      "clause": {
+        "id": "beijing_road:feibiao:001",
+        "type": "废标",
+        "text": "投标保证金金额：01 包 8000 元，未按上述要求缴纳的投标无效",
+        "evidence": {
+          "page": 17,
+          "bbox": [60.1, 120.0, 540.0, 300.0],
+          "text": "12.1 投标人应按《投标人须知资料表》中规定的金额及要求交纳投标保证金。",
+          "chapter": "第二章 投标人须知",
+          "clause": "12.1"
+        }
+      },
+      "finding": { "table": "废标对照", "verdict": "不满足" },
+      "expect_failed": "text_contains"
+    },
+    {
+      "id": "ref-to-missing-chapter",
+      "doc": "beijing_road",
+      "why": "beijing 只有 7 章；抽到「详见第九章」这种引用就是编的",
+      "clause": {
+        "id": "beijing_road:feibiao:020",
+        "type": "废标",
+        "text": "投标有效期的具体要求详见第九章",
+        "evidence": {
+          "page": 8,
+          "bbox": [47.0, 37.3, 548.2, 200.0],
+          "text": "13.1 投标有效期 自提交投标文件的截止之日起算90 日历天。",
+          "chapter": "第二章 投标人须知",
+          "clause": "13.1"
+        }
+      },
+      "finding": { "table": "废标对照", "verdict": "人工看" },
+      "expect_failed": "cross_ref_section"
+    }
+  ]
+}

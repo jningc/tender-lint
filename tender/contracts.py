@@ -22,7 +22,8 @@ ClauseType = Literal["废标", "评分", "材料", "空位", "时间", "合同"]
 TableName = Literal["废标对照", "评分对照", "材料对照", "空位对照", "时间节点", "合同要点"]
 Verdict = Literal["满足", "不满足", "人工看", "无须提供"]
 Source = Literal["rule", "model", "follow", "manual"]
-CheckName = Literal["page_exists", "text_contains", "cross_ref_section", "value_normalized"]
+CheckName = Literal["page_exists", "text_contains", "cross_ref_section",
+                    "value_normalized", "table_exclusive"]
 
 TYPE_TO_TABLE: dict[str, str] = {
     "废标": "废标对照",

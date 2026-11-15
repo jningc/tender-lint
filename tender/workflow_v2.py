@@ -6,13 +6,23 @@
 """
 
 import json
+import os
 from pathlib import Path
 
+from tender.parse import page_texts
 from tender.stages import compare_stage, extract_stage, parse_stage, verify_stage
 from tender.workflow import _progress_cb, load_company
 
 ROOT = Path(__file__).resolve().parent.parent
 TABLES = extract_stage.TABLES
+
+
+def _enforce() -> bool:
+    """校验段是否改表。默认开（阶段 4）；TENDER_VERIFY_ENFORCE=0 可关回「只记录」。"""
+    return os.environ.get("TENDER_VERIFY_ENFORCE", "1").strip().lower() not in ("0", "false", "off")
+
+
+ENFORCE = _enforce()
 
 
 def run_check_v2(pdf_path, company_path, on_progress=None, reuse_index: bool = True) -> dict:
@@ -51,12 +61,18 @@ def _run(pdf_path, company_path, reuse_index: bool) -> dict:
     compare_stage.dump(cmp, folder)
     _emit("compare", "done", f"{len(cmp.findings)} 条结论")
 
-    # 4 校验：阶段 2 只查页码存在，且不改变输出
-    _emit("verify", "running", "回查页码")
-    verified = verify_stage.run(cmp, ex, enforce=False)
+    # 4 校验：机械回查（页码/数值/交叉引用/串表），默认开；enforce 时改表
+    _emit("verify", "running", "回查页码、数值、交叉引用")
+    texts = page_texts(pdf_path)
+    verified = verify_stage.run(cmp, ex, texts=texts, page_count=doc.page_count,
+                                sections=doc.sections, enforce=ENFORCE)
     verify_stage.dump(verified, folder)
+    changes = verify_stage.apply(verified, ex, enforce=ENFORCE)
+    verify_stage.dump_changes(changes, folder)
     vsum = verify_stage.summary(verified)
-    _emit("verify", "done", f"{vsum['passed']}/{vsum['checked']} 通过页码回查")
+    _emit("verify", "done",
+          f"{vsum['passed']}/{vsum['checked']} 通过；降级 {len(changes['downgraded'])} 条、"
+          f"移出 {len(changes['moved_out'])} 条")
 
     result = {
         "pdf_path": str(Path(pdf_path).resolve()),
@@ -71,6 +87,7 @@ def _run(pdf_path, company_path, reuse_index: bool) -> dict:
         "page_count": doc.page_count,
         "engine": "v2",
         "timings": ex.timings,
+        "verify": {"summary": vsum, "changes": changes},
         "contracts": {
             "clauses": len(ex.clauses),
             "findings": len(cmp.findings),
