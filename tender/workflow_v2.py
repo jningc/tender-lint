@@ -70,6 +70,7 @@ def _run(pdf_path, company_path, reuse_index: bool) -> dict:
         "pages": [],
         "page_count": doc.page_count,
         "engine": "v2",
+        "timings": ex.timings,
         "contracts": {
             "clauses": len(ex.clauses),
             "findings": len(cmp.findings),

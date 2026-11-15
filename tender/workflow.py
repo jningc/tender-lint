@@ -5,6 +5,7 @@
 """
 
 import re
+import time
 from contextvars import ContextVar
 from pathlib import Path
 from typing import Annotated, TypedDict
@@ -93,7 +94,7 @@ def _ref_from_hit(h: dict, clause: str = "") -> Ref:
 
 
 def _extract(schema, system: str, hits: list[dict], extra: str = ""):
-    """用结构化输出从检索段落抽表。"""
+    """用结构化输出从检索段落抽表。失败重试两次——并发上来以后 429 会变常见。"""
     llm = get_llm().with_structured_output(schema, method="function_calling")
     prompt = (
         system
@@ -103,7 +104,16 @@ def _extract(schema, system: str, hits: list[dict], extra: str = ""):
         + "\n参考资料：\n"
         + _hit_blob(hits)
     )
-    return llm.invoke(prompt)
+    last = None
+    for attempt in range(3):
+        try:
+            return llm.invoke(prompt)
+        except Exception as exc:  # 网络/限流/结构化输出偶发失败
+            last = exc
+            if attempt == 2:
+                break
+            time.sleep(1.5 * (attempt + 1))
+    raise RuntimeError(f"模型调用连续失败 3 次：{last}")
 
 
 def _follow(index: TenderIndex, rows: list, types: list[str]) -> None:
@@ -258,51 +268,70 @@ def node_kongwei(state: CheckState) -> dict:
     }
 
 
-def node_aux(state: CheckState) -> dict:
-    """时间节点和合同要点。合同与废标分开。"""
+def node_shijian(state: CheckState) -> dict:
+    """时间节点。单独成节点，v2 才能和合同并发跑。"""
     print("  [时间] 调用模型", flush=True)
-    _emit("aux", "running", "抽取时间节点")
-    time_hits = state["index"].search(
+    _emit("shijian", "running", "抽取时间节点")
+    hits = state["index"].search(
         "截止时间 开标 获取招标文件 有效期 质疑",
         ["invite", "notice"],
         k=4,
     )
-    ht_hits = state["index"].search(
+    shijian = _extract(ShijianTable, "你在抽取时间节点。", hits)
+    _follow(state["index"], shijian.rows, ["invite", "notice"])
+    rows = [r.model_dump() for r in shijian.rows]
+    print(f"  [时间] {len(rows)} 条", flush=True)
+    _emit("shijian", "done", f"{len(rows)} 条", shijian=rows)
+    return {
+        "shijian": rows,
+        "dropped": {"shijian": shijian.dropped_rows},
+        "degraded": {"shijian": shijian.degraded_rows},
+    }
+
+
+def node_hetong(state: CheckState) -> dict:
+    """合同要点。合同与废标分开，履约保证金不许进废标表。"""
+    print("  [合同] 调用模型", flush=True)
+    _emit("hetong", "running", "抽取合同要点")
+    hits = state["index"].search(
         "预付款 履约保证金 支付 违约 验收 更换总监",
         ["contract", "format"],
         k=4,
     )
-    shijian = _extract(ShijianTable, "你在抽取时间节点。", time_hits)
-    print("  [合同] 调用模型", flush=True)
-    _emit("aux", "running", "抽取合同要点")
     hetong = _extract(
         HetongTable,
         "你在抽取合同要点。履约保证金不是投标保证金，不要和废标表混。",
-        ht_hits,
+        hits,
     )
-    _follow(state["index"], shijian.rows, ["invite", "notice"])
     _follow(state["index"], hetong.rows, ["contract", "format"])
-    shijian_rows = [r.model_dump() for r in shijian.rows]
-    hetong_rows = [r.model_dump() for r in hetong.rows]
-    print(f"  [时间] {len(shijian_rows)} 条  [合同] {len(hetong_rows)} 条", flush=True)
+    rows = [r.model_dump() for r in hetong.rows]
+    print(f"  [合同] {len(rows)} 条", flush=True)
+    _emit("hetong", "done", f"{len(rows)} 条", hetong=rows)
+    return {
+        "hetong": rows,
+        "dropped": {"hetong": hetong.dropped_rows},
+        "degraded": {"hetong": hetong.degraded_rows},
+    }
+
+
+def node_aux(state: CheckState) -> dict:
+    """辅助表：时间 + 合同。v1 走这里，顺序与拆分前一致。"""
+    _emit("aux", "running", "抽取时间节点")
+    a = node_shijian(state)
+    _emit("aux", "running", "抽取合同要点")
+    b = node_hetong(state)
     _emit(
         "aux",
         "done",
-        f"时间 {len(shijian_rows)} 条，合同 {len(hetong_rows)} 条",
-        shijian=shijian_rows,
-        hetong=hetong_rows,
+        f"时间 {len(a['shijian'])} 条，合同 {len(b['hetong'])} 条",
+        shijian=a["shijian"],
+        hetong=b["hetong"],
     )
     return {
-        "shijian": shijian_rows,
-        "hetong": hetong_rows,
-        "dropped": {
-            "shijian": shijian.dropped_rows,
-            "hetong": hetong.dropped_rows,
-        },
-        "degraded": {
-            "shijian": shijian.degraded_rows,
-            "hetong": hetong.degraded_rows,
-        },
+        "shijian": a["shijian"],
+        "hetong": b["hetong"],
+        "dropped": _merge_dict(a.get("dropped") or {}, b.get("dropped") or {}),
+        "degraded": _merge_dict(a.get("degraded") or {}, b.get("degraded") or {}),
     }
 
 

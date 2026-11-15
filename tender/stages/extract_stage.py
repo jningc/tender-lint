@@ -9,6 +9,10 @@
 """
 
 import json
+import os
+import time
+from concurrent.futures import ThreadPoolExecutor
+from contextvars import copy_context
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -18,11 +22,22 @@ from tender.contracts import Clause, ContractError, Evidence
 from tender.workflow import (
     _emit,
     _merge_dict,
-    node_aux,
     node_cailiao,
     node_feibiao,
+    node_hetong,
     node_kongwei,
     node_pingfen,
+    node_shijian,
+)
+
+#: 六个抽取作业：每张表一次模型调用，彼此独立
+JOBS = (
+    ("feibiao", node_feibiao),
+    ("pingfen", node_pingfen),
+    ("cailiao", node_cailiao),
+    ("kongwei", node_kongwei),
+    ("shijian", node_shijian),
+    ("hetong", node_hetong),
 )
 
 TABLES = ("feibiao", "pingfen", "cailiao", "kongwei", "shijian", "hetong")
@@ -57,6 +72,7 @@ class ExtractResult:
     dropped: dict = field(default_factory=dict)
     degraded: dict = field(default_factory=dict)
     missing: list = field(default_factory=list)
+    timings: dict = field(default_factory=dict)       # {"extract_s": 秒, "workers": N}
 
 
 def _text(row: dict, fields: tuple[str, ...]) -> str:
@@ -108,27 +124,54 @@ def _to_clauses(stem: str, rows: dict) -> tuple[list[Clause], dict, list[dict]]:
     return clauses, row_of, rejects
 
 
-def run(doc, index, company) -> ExtractResult:
-    """按 v1 的节点顺序跑一遍，返回行 + 条款。"""
-    _emit("extract", "running", "检索并抽取六张表")
+def _default_workers() -> int:
+    """并发度：默认 6（六张表各一个请求）。设 1 就是串行。"""
+    try:
+        return max(1, int(os.environ.get("TENDER_MAX_WORKERS", "6")))
+    except ValueError:
+        return 6
+
+
+def _run_jobs(state: dict, workers: int) -> list[tuple[str, dict]]:
+    """跑六个抽取作业。workers>1 时并发；每个作业带一份 context 副本，
+    否则子线程里 `_emit` 读不到进度回调（ContextVar 不跨线程自动继承）。"""
+    if workers <= 1:
+        return [(name, fn(state)) for name, fn in JOBS]
+
+    out = []
+    with ThreadPoolExecutor(max_workers=min(workers, len(JOBS))) as pool:
+        futures = [pool.submit(copy_context().run, fn, state) for _, fn in JOBS]
+        for (name, _), fut in zip(JOBS, futures):
+            out.append((name, fut.result()))
+    return out
+
+
+def run(doc, index, company, workers: int | None = None) -> ExtractResult:
+    """跑六个抽取作业（默认并发），返回六表行 + 条款清单。"""
+    workers = workers if workers is not None else _default_workers()
+    _emit("extract", "running", f"检索并抽取六张表（并发 {workers}）")
     state = {"pdf_path": doc.pdf, "company": company, "index": index}
+
+    t0 = time.time()
     merged: dict = {}
-    for node in (node_feibiao, node_pingfen, node_cailiao, node_kongwei, node_aux):
-        out = node(state) or {}
-        for key, value in out.items():
+    for _, part in _run_jobs(state, workers):
+        for key, value in (part or {}).items():
             if key in ("dropped", "degraded"):
                 merged[key] = _merge_dict(merged.get(key) or {}, value)
             else:
                 merged[key] = value
+    elapsed = round(time.time() - t0, 1)
 
     rows = {t: merged.get(t) or [] for t in TABLES}
     stem = Path(doc.pdf).stem
     clauses, row_of, rejects = _to_clauses(stem, rows)
-    _emit("extract", "done", f"六表 {sum(len(v) for v in rows.values())} 行，条款 {len(clauses)} 条")
+    _emit("extract", "done",
+          f"六表 {sum(len(v) for v in rows.values())} 行，条款 {len(clauses)} 条，{elapsed}s")
     return ExtractResult(
         rows=rows, row_of=row_of, clauses=clauses, rejects=rejects,
         dropped=merged.get("dropped") or {}, degraded=merged.get("degraded") or {},
         missing=merged.get("missing") or [],
+        timings={"extract_s": elapsed, "workers": workers},
     )
 
 

@@ -17,6 +17,7 @@ import argparse
 import json
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -33,8 +34,8 @@ COMPANIES = {
 OUT = ROOT / "eval" / "engine"
 
 
-def run_doc(engine: str, doc: str, rebuild: bool) -> dict:
-    folder = OUT / engine / doc
+def run_doc(engine: str, doc: str, rebuild: bool, base: Path | None = None) -> dict:
+    folder = (base or (OUT / engine)) / doc
     folder.mkdir(parents=True, exist_ok=True)
     result = check(f"sample/{doc}.pdf", COMPANIES[doc], engine=engine, reuse_index=not rebuild)
     payload = {"doc": doc, "engine": engine,
@@ -59,16 +60,32 @@ def main() -> int:
     ap.add_argument("--engine", choices=["v1", "v2"], required=True)
     ap.add_argument("--docs", nargs="*", choices=list(COMPANIES), default=list(COMPANIES))
     ap.add_argument("--rebuild-index", action="store_true")
+    ap.add_argument("--workers", type=int, default=1,
+                    help="文档级并发（默认 1；2 安全，再高容易触发限流）")
+    ap.add_argument("--tag", default="", help="产物目录后缀，试跑用，别覆盖正式结果")
     args = ap.parse_args()
+    base = OUT / f"{args.engine}{args.tag}"
+
+    if args.workers > 1:
+        # 先在主线程把 embedding 模型加载好，避免多线程同时初始化
+        from tender.index import get_embeddings
+
+        get_embeddings()
 
     rows = []
-    for doc in args.docs:
-        s = run_doc(args.engine, doc, args.rebuild_index)
-        rows.append(s)
-        c = s["counts"]
-        print(f"{doc}: 正例 {c['pos_hit']}/{c['positive']} 负例 {c['neg_hit']}/{c['negative']} "
-              f"违规 {c['violated']} | 行 {sum(s['rows'].values())} | contracts {s['contracts']}",
-              flush=True)
+    if args.workers <= 1:
+        for doc in args.docs:
+            rows.append(run_doc(args.engine, doc, args.rebuild_index, base))
+            _report_doc(rows[-1])
+    else:
+        with ThreadPoolExecutor(max_workers=args.workers) as pool:
+            futures = {pool.submit(run_doc, args.engine, doc, args.rebuild_index, base): doc
+                       for doc in args.docs}
+            for fut in as_completed(futures):
+                rows.append(fut.result())
+                _report_doc(rows[-1])
+        order = {doc: i for i, doc in enumerate(args.docs)}
+        rows.sort(key=lambda r: order[r["doc"]])
 
     total_pos = sum(r["counts"]["pos_hit"] for r in rows)
     total_p = sum(r["counts"]["positive"] for r in rows)
@@ -77,10 +94,17 @@ def main() -> int:
     summary = {"engine": args.engine, "docs": rows,
                "total": {"pos_hit": total_pos, "positive": total_p,
                          "neg_hit": total_neg, "negative": total_n}}
-    (OUT / args.engine / "summary.json").write_text(
+    (base / "summary.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"\n{args.engine} 合计：正例 {total_pos}/{total_p}，负例 {total_neg}/{total_n}", flush=True)
     return 0
+
+
+def _report_doc(s: dict) -> None:
+    c = s["counts"]
+    print(f"{s['doc']}: 正例 {c['pos_hit']}/{c['positive']} 负例 {c['neg_hit']}/{c['negative']} "
+          f"违规 {c['violated']} | 行 {sum(s['rows'].values())} | contracts {s['contracts']}",
+          flush=True)
 
 
 if __name__ == "__main__":
