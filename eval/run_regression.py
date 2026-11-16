@@ -155,22 +155,50 @@ def totals(docs: list[dict]) -> dict:
 
 # ---------- 与上次比较 ----------
 
+def common_stable(current: dict, baseline: dict) -> dict[str, tuple[str, str]]:
+    """两次都稳定的题 → {qid: (上次结论, 这次结论)}。
+
+    稳定集本身会漂（某题这轮 flaky、上轮稳定），直接比「稳定题得分」等于拿
+    不同的分母比大小：分母小了分数自然低，会把「模型抖动」判成「代码退化」。
+    所以只在两次都稳定的题上比。
+    """
+    flaky_now = {q for d in current.get("docs", []) for q in d.get("flaky") or []}
+    flaky_base = {q for d in baseline.get("docs", []) for q in d.get("flaky") or []}
+    base_q = {q: s for d in baseline.get("docs", []) for q, s in (d.get("questions") or {}).items()}
+    pairs = {}
+    for d in current.get("docs", []):
+        for q, status in (d.get("questions") or {}).items():
+            if q in flaky_now or q in flaky_base or q not in base_q:
+                continue
+            pairs[q] = (base_q[q], status)
+    return pairs
+
+
 def gate(current: dict, baseline: dict | None) -> list[str]:
-    """返回退化原因；空列表 = 通过。判红只看**稳定题**与标记页覆盖。"""
+    """返回退化原因；空列表 = 通过。判红只看**两次都稳定的题**与标记页覆盖。"""
     if not baseline:
         return []
     reasons = []
-    cur, base = current["totals"], baseline["totals"]
-    if cur["pos_stable_hit"] < base.get("pos_stable_hit", 0):
-        reasons.append(f"稳定正例 {cur['pos_stable_hit']} < 上次 {base.get('pos_stable_hit')}")
-    if cur["neg_stable_hit"] < base.get("neg_stable_hit", 0):
-        reasons.append(f"稳定负例 {cur['neg_stable_hit']} < 上次 {base.get('neg_stable_hit')}")
+    pairs = common_stable(current, baseline)
+    pos = {q: v for q, v in pairs.items() if KINDS[q]["kind"] == "positive"}
+    neg = {q: v for q, v in pairs.items() if KINDS[q]["kind"] == "negative"}
+
+    def _drop(group, name):
+        was = sum(1 for b, _ in group.values() if b == "hit")
+        now = sum(1 for _, c in group.values() if c == "hit")
+        if now < was:
+            reasons.append(f"{name} {now}/{len(group)} < 上次 {was}/{len(group)}"
+                           f"（同一批题，掉的是：{'、'.join(q for q, (b, c) in group.items() if b == 'hit' and c != 'hit')}）")
+
+    _drop(pos, "正例")
+    _drop(neg, "负例")
+
     if current["markers"]["covered_pages"] < baseline["markers"]["covered_pages"]:
         reasons.append(f"★ 覆盖页 {current['markers']['covered_pages']} < 上次 "
                        f"{baseline['markers']['covered_pages']}")
-    if cur.get("violated", 0) > base.get("violated", 0):
-        reasons.append(f"负例违规 {cur['violated']} > 上次 {base.get('violated', 0)}"
-                       f"（串表变多了）")
+    if current["totals"].get("violated", 0) > baseline["totals"].get("violated", 0):
+        reasons.append(f"负例违规 {current['totals']['violated']} > 上次 "
+                       f"{baseline['totals'].get('violated', 0)}（串表变多了）")
     return reasons
 
 

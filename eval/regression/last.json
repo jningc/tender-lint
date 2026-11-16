@@ -1,8 +1,8 @@
 {
   "engine": "v2",
   "repeats": 3,
-  "at": "20261115-202011",
-  "duration_s": 160.2,
+  "at": "20261115-204254",
+  "duration_s": 162.5,
   "docs": [
     {
       "doc": "beijing_road",
@@ -41,7 +41,7 @@
         "covered_pages_median": 0,
         "star_rows_median": 0
       },
-      "rows_median": 59
+      "rows_median": 57
     },
     {
       "doc": "chongzuo_green",
@@ -54,16 +54,14 @@
         "cz-perf-bond": "hit",
         "cz-price": "hit"
       },
-      "flaky": [
-        "cz-cap"
-      ],
+      "flaky": [],
       "positive": {
         "hit": 4,
         "total": 5
       },
       "positive_stable": {
         "hit": 4,
-        "total": 4
+        "total": 5
       },
       "negative": {
         "hit": 1,
@@ -77,9 +75,9 @@
       "markers": {
         "markers_total": 30,
         "covered_pages_median": 1,
-        "star_rows_median": 18
+        "star_rows_median": 1
       },
-      "rows_median": 70
+      "rows_median": 63
     },
     {
       "doc": "wenling_video",
@@ -93,7 +91,7 @@
         "wl-validity": "hit"
       },
       "flaky": [
-        "wl-validity"
+        "wl-perf-bond"
       ],
       "positive": {
         "hit": 5,
@@ -117,20 +115,20 @@
         "covered_pages_median": 1,
         "star_rows_median": 1
       },
-      "rows_median": 79
+      "rows_median": 109
     }
   ],
   "totals": {
     "pos_hit": 16,
     "pos_total": 18,
     "pos_stable_hit": 15,
-    "pos_stable_total": 16,
+    "pos_stable_total": 17,
     "neg_hit": 3,
     "neg_total": 3,
     "neg_stable_hit": 3,
     "neg_stable_total": 3,
     "violated": 0,
-    "flaky": 2
+    "flaky": 1
   },
   "markers": {
     "covered_pages": 2
