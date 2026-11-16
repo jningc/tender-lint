@@ -94,13 +94,38 @@ def load_company(path) -> dict:
         return yaml.safe_load(f)
 
 
+def _topk(default: int) -> int:
+    """检索条数。段落单位校准出来的默认值是 4–6；换成条款单位后每条更短，
+    必须调大才能覆盖同样多的信息，用 `TENDER_TOPK` 覆盖。"""
+    try:
+        return max(1, int(os.environ.get("TENDER_TOPK") or default))
+    except ValueError:
+        return default
+
+
+#: 命中素材的总字数上限。k 调大以后 12 条 × 每条几百字会直接压垮结构化输出
+#: （实测 k=12 时模型连续 3 次返回空结果）
+HIT_BLOB_MAX_CHARS = 8000
+
+
 def _hit_blob(hits: list[dict]) -> str:
+    """命中拼成提示词。条款模式优先用 `context`（父标题链 + 本条），
+    证据仍取 `text`——模型看全链，但 refs 只引命中那一条。
+
+    总长度封顶，超出就丢掉靠后的命中（top-k 已经按相关度排过）。
+    """
     parts = []
+    used = 0
     for i, h in enumerate(hits, start=1):
-        parts.append(
+        body = h.get("context") or h.get("text") or ""
+        block = (
             f"[{i}] 第{h.get('page')}页 {h.get('section_title')}\n"
-            f"bbox={h.get('bbox')}\n{h.get('text')}"
+            f"bbox={h.get('bbox')}\n{body}"
         )
+        if parts and used + len(block) > HIT_BLOB_MAX_CHARS:
+            break
+        parts.append(block)
+        used += len(block)
     return "\n\n".join(parts) if parts else "（本章无检索结果）"
 
 
@@ -126,16 +151,21 @@ def _extract(schema, system: str, hits: list[dict], extra: str = ""):
         + _hit_blob(hits)
     )
     last = None
-    for attempt in range(3):
+    for attempt in range(5):
         try:
             with _semaphore():  # 卡片级限流：并发到顶就排队，不直接 429
-                return llm.invoke(prompt)
+                result = llm.invoke(prompt)
+            if result is None:
+                # 模型偶发返回空结构化结果：当失败重试，别把 None 递给下游。
+                # 命中条目多（k 调大）时更容易出现，所以重试给到 5 次。
+                raise ValueError("模型返回空结构化结果")
+            return result
         except Exception as exc:  # 网络/限流/结构化输出偶发失败
             last = exc
-            if attempt == 2:
+            if attempt == 4:
                 break
             time.sleep(1.5 * (attempt + 1))
-    raise RuntimeError(f"模型调用连续失败 3 次：{last}")
+    raise RuntimeError(f"模型调用连续失败 5 次：{last}")
 
 
 def _follow(index: TenderIndex, rows: list, types: list[str]) -> None:
@@ -151,7 +181,7 @@ def _follow(index: TenderIndex, rows: list, types: list[str]) -> None:
         if not _REF_HINT.search(blob):
             continue
         q = _REF_HINT.search(blob).group(0)
-        extra = index.search(q + " " + blob[:40], types, k=2)
+        extra = index.search(q + " " + blob[:40], types, k=_topk(2))
         have = {(r.page, r.text[:20]) for r in row.refs}
         for h in extra:
             key = (h.get("page"), (h.get("text") or "")[:20])
@@ -177,7 +207,7 @@ def node_feibiao(state: CheckState) -> dict:
     hits = state["index"].search(
         "投标无效 废标 资格 保证金 有效期 联合体 最高限价 实质性",
         types,
-        k=5,
+        k=_topk(5),
     )
     extra = "公司情况：\n" + yaml.safe_dump(state["company"], allow_unicode=True)
     extra += "\n抽出会导致投标无效或资格不合格的条件，对照公司情况给结论。"
@@ -225,7 +255,7 @@ def node_pingfen(state: CheckState) -> dict:
         }]
         _emit("pingfen", "done", "未切到评标章", rows=rows)
         return {"pingfen": rows}
-    hits = state["index"].search("评标标准 分值 价格分 商务 技术 业绩", types, k=6)
+    hits = state["index"].search("评标标准 分值 价格分 商务 技术 业绩", types, k=_topk(6))
     extra = "公司情况：\n" + yaml.safe_dump(state["company"], allow_unicode=True)
     extra += "\n抽出评分项、分值、标准；能对照公司材料的写上预估，主观分写「主观分，不预估」。"
     table = _extract(PingfenTable, "你在抽取评分项。", hits, extra)
@@ -245,7 +275,7 @@ def node_cailiao(state: CheckState) -> dict:
     print("  [材料] 检索须知、资格、格式，并调用模型", flush=True)
     _emit("cailiao", "running", "检索须知、资格、格式")
     types = ["notice", "qualify", "format"]
-    hits = state["index"].search("应提供 证明 证书 营业执照 保证金 授权委托 声明函", types, k=6)
+    hits = state["index"].search("应提供 证明 证书 营业执照 保证金 授权委托 声明函", types, k=_topk(6))
     extra = "公司情况：\n" + yaml.safe_dump(state["company"], allow_unicode=True)
     extra += "\n列出必须提交的证明材料，对照公司有没有。代理机构代查的标「无须提供」。"
     table = _extract(CailiaoTable, "你在抽取投标须提交的材料。", hits, extra)
@@ -276,7 +306,7 @@ def node_kongwei(state: CheckState) -> dict:
         }]
         _emit("kongwei", "done", "未切到投标文件格式章", rows=rows)
         return {"kongwei": rows}
-    hits = state["index"].search("投标函 开标一览表 偏离表 声明函 空白 实质性格式", types, k=6)
+    hits = state["index"].search("投标函 开标一览表 偏离表 声明函 空白 实质性格式", types, k=_topk(6))
     extra = "只列出表格名称和要填的空位，不要替用户填写。"
     table = _extract(KongweiTable, "你在抽取投标文件格式里的空位。", hits, extra)
     _follow(state["index"], table.rows, types)
@@ -297,7 +327,7 @@ def node_shijian(state: CheckState) -> dict:
     hits = state["index"].search(
         "截止时间 开标 获取招标文件 有效期 质疑",
         ["invite", "notice"],
-        k=4,
+        k=_topk(4),
     )
     shijian = _extract(ShijianTable, "你在抽取时间节点。", hits)
     _follow(state["index"], shijian.rows, ["invite", "notice"])
@@ -318,7 +348,7 @@ def node_hetong(state: CheckState) -> dict:
     hits = state["index"].search(
         "预付款 履约保证金 支付 违约 验收 更换总监",
         ["contract", "format"],
-        k=4,
+        k=_topk(4),
     )
     hetong = _extract(
         HetongTable,

@@ -51,7 +51,7 @@ def _repeat_key(text: str) -> str:
     return _NUMS.sub("#", re.sub(r"\s+", " ", text)).strip()
 
 
-def _body_size(pages: list[dict]) -> float | None:
+def body_size(pages: list[dict]) -> float | None:
     """正文号：按字数加权取众数，正文总是占字最多。没有字号信息时返回 None。"""
     weighted: Counter = Counter()
     for page in pages:
@@ -99,14 +99,14 @@ def mark_edge_repeats(pages: list[dict], repeat_share: float = REPEAT_SHARE,
     if not pages:
         return pages
     threshold = max(3, int(len(pages) * repeat_share))
-    body_size = _body_size(pages)
+    body = body_size(pages)
     counts: Counter = Counter()
 
     for page in pages:
         h = page.get("height") or 842.0
         seen = set()
         for block in page.get("blocks") or []:
-            kind = _edge_kind(block, h, body_size, edge_band, max_len)
+            kind = _edge_kind(block, h, body, edge_band, max_len)
             if kind is None:
                 continue
             key = (_repeat_key(block["text"]), kind)
@@ -121,7 +121,7 @@ def mark_edge_repeats(pages: list[dict], repeat_share: float = REPEAT_SHARE,
     for page in pages:
         h = page.get("height") or 842.0
         for block in page.get("blocks") or []:
-            kind = _edge_kind(block, h, body_size, edge_band, max_len)
+            kind = _edge_kind(block, h, body, edge_band, max_len)
             if kind is None:
                 continue
             if (_repeat_key(block["text"]), kind) in repeated:
@@ -212,6 +212,21 @@ def page_count(pdf_path) -> int:
     n = doc.page_count
     doc.close()
     return n
+
+
+def pdf_toc(pdf_path) -> list[dict]:
+    """PDF 书签（大纲）：`[{level, title, page}]`，页码是物理页，与 Evidence 同一口径。
+
+    招标文件大多带书签，而且层级正好是「章 → 一、二、三、」；比在正文里猜
+    标题层级可靠得多。没有书签的文档返回空列表，由调用方回退到目录页/编号。
+    """
+    doc = fitz.open(pdf_path)
+    try:
+        toc = doc.get_toc(simple=True) or []
+        return [{"level": int(lv), "title": str(title).strip(), "page": int(page)}
+                for lv, title, page in toc if str(title).strip()]
+    finally:
+        doc.close()
 
 
 def page_texts(pdf_path) -> dict[int, str]:

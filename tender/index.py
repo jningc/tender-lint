@@ -11,9 +11,16 @@ from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 from rank_bm25 import BM25Okapi
 
+from tender.clauses import prefix_of
 from tender.sections import TYPE_LABEL, section_of_page
 
-INDEX_VERSION = 3  # 3 = 块带字号/页眉标记（2 只有块级 bbox；旧缓存必须重建）
+INDEX_VERSION = 6  # 6 = 条款模式 context 改父标题链（5 是滑动窗口，4 是整组兄弟）
+
+#: 条款模式的返回上下文：父标题链 + 本条，字数上限
+#: 拼过「同前缀整组兄弟」（单条 3000 字，正例掉到 10/18），也试过滑动窗口，
+#: 都不如父标题链——标题只有几十字，语义还正好是「这一条在讲什么」
+MIN_CONTEXT_CHARS = 200
+MAX_CONTEXT_CHARS = 1000
 
 DEFAULT_INDEX_ROOT = Path(__file__).resolve().parent.parent / "data" / "tender_index"
 DEFAULT_EMBED_MODEL = "BAAI/bge-small-zh-v1.5"
@@ -107,6 +114,59 @@ def chunk_pages(pages: list[dict], sections: list[dict], target_len: int = 380) 
     return chunks
 
 
+def chunk_clauses(nodes, pages: list[dict], sections: list[dict]) -> list[dict]:
+    """条款单位的索引条目：一条条款 = 一个 chunk，bbox 用条款级并集。
+
+    和 `chunk_pages` 的差别是两个角色分开：
+
+    - **匹配用 `text`**（条款原文，短条款也能靠自身关键词命中）；
+    - **返回用 `context`**（同编号前缀的兄弟条款拼一起），喂给模型时优先用它。
+      只给一条 20 字的 ★ 条款，模型判不出上下文；给 12.1–12.6 整组才行。
+    """
+    heights = {p["page"]: p.get("height") or 842.0 for p in pages}
+    source = (pages[0].get("source") if pages else "") or "doc.pdf"
+    by_id = {n.id: n for n in nodes}
+
+    def _context(node, idx: int) -> str:
+        """命中条款 + 父标题链（章 → 节 → …），上限 MAX_CONTEXT_CHARS。
+
+        父标题只有十几到几十个字，所以这条路天然不会撑爆提示词；早先拼
+        「同前缀全部兄弟」才会到 3000 字一条。
+        """
+        chain = []
+        parent = by_id.get(node.parent_id) if node.parent_id else None
+        while parent is not None and len(chain) < 3:
+            chain.append(parent.text)
+            parent = by_id.get(parent.parent_id) if parent.parent_id else None
+        chain.reverse()
+        ctx = "\n".join(chain + [node.text])
+        return ctx[:MAX_CONTEXT_CHARS]
+
+    chunks = []
+    for idx, node in enumerate(nodes):
+        sec = section_of_page(sections, node.page_start) or {}
+        chunks.append({
+            "text": node.text,
+            "context": _context(node, idx),
+            "page": node.page_start,
+            "page_height": heights.get(node.page_start) or 842.0,
+            "source": source,
+            "section_type": node.section or sec.get("type"),
+            "section_title": sec.get("title") or "",
+            "bbox": list(node.bbox),          # 条款级并集，不再是段并集
+            "blocks": [{                       # 让 pick_block 有东西可选
+                "text": node.text,
+                "bbox": list(node.bbox),
+                "max_size": None,
+                "is_header": False,
+            }],
+            "kind": "clause" if node.is_clause else "block",
+            "clause_id": node.id,
+            "number": node.number,
+        })
+    return chunks
+
+
 class SectionIndex:
     """某一章类型的 BM25 + 向量库。"""
 
@@ -124,6 +184,10 @@ class SectionIndex:
                 "bbox": ",".join(str(x) for x in c["bbox"]),
                 "blocks": json.dumps(c.get("blocks") or [], ensure_ascii=False),
                 "source": c.get("source"),
+                "context": c.get("context") or "",
+                "kind": c.get("kind") or "",
+                "clause_id": c.get("clause_id") or "",
+                "number": c.get("number") or "",
             } for c in chunks]
             self.vs = FAISS.from_texts(
                 [c["text"] for c in chunks],
@@ -153,6 +217,10 @@ class SectionIndex:
                 "section_title": doc.metadata.get("section_title"),
                 "bbox": bbox,
                 "blocks": json.loads(doc.metadata.get("blocks") or "[]"),
+                "context": doc.metadata.get("context") or "",
+                "kind": doc.metadata.get("kind") or "",
+                "clause_id": doc.metadata.get("clause_id") or "",
+                "number": doc.metadata.get("number") or "",
             })
         self = cls.__new__(cls)
         self.chunks = chunks
@@ -171,7 +239,10 @@ class SectionIndex:
             "section_title": chunk.get("section_title"),
             "bbox": precise["bbox"] if precise else chunk["bbox"],
             "bbox_union": chunk["bbox"],
-            "bbox_kind": precise["kind"] if precise else "chunk",
+            "bbox_kind": chunk.get("kind") or (precise["kind"] if precise else "chunk"),
+            "context": chunk.get("context") or "",
+            "clause_id": chunk.get("clause_id") or "",
+            "number": chunk.get("number") or "",
         }
 
     def search(self, query: str, k: int = 4) -> list[dict]:
@@ -208,6 +279,10 @@ class SectionIndex:
                 "section_title": doc.metadata.get("section_title"),
                 "bbox": bbox,
                 "blocks": json.loads(doc.metadata.get("blocks") or "[]"),
+                "context": doc.metadata.get("context") or "",
+                "kind": doc.metadata.get("kind") or "",
+                "clause_id": doc.metadata.get("clause_id") or "",
+                "number": doc.metadata.get("number") or "",
             }))
         return picked[: k * 2]
 
@@ -215,10 +290,12 @@ class SectionIndex:
 class TenderIndex:
     """按章类型分库的总索引。"""
 
-    def __init__(self, stores: dict[str, SectionIndex], sections: list[dict], pdf_path: str):
+    def __init__(self, stores: dict[str, SectionIndex], sections: list[dict], pdf_path: str,
+                 unit: str = "paragraph"):
         self.stores = stores
         self.sections = sections
         self.pdf_path = pdf_path
+        self.unit = unit
 
     def search(self, query: str, section_types: list[str], k: int = 4) -> list[dict]:
         """只在指定章类型里搜。"""
@@ -248,6 +325,7 @@ def save_tender_index(index: TenderIndex) -> Path:
         saved.append(typ)
     manifest = {
         "index_version": INDEX_VERSION,
+        "chunk_unit": index.unit,
         "pdf_path": index.pdf_path,
         "sections": index.sections,
         "types": saved,
@@ -269,12 +347,22 @@ def load_tender_index(pdf_path) -> TenderIndex:
     stores = {}
     for typ in manifest.get("types") or []:
         stores[typ] = SectionIndex.load(root / typ)
-    return TenderIndex(stores, manifest.get("sections") or [], str(pdf_path))
+    return TenderIndex(stores, manifest.get("sections") or [], str(pdf_path),
+                       unit=manifest.get("chunk_unit") or "paragraph")
 
 
-def build_tender_index(pages: list[dict], sections: list[dict], pdf_path: str, on_chapter=None) -> TenderIndex:
-    """切块并按类型建库，并把向量库写到 data/tender_index。"""
-    chunks = chunk_pages(pages, sections)
+def build_tender_index(pages: list[dict], sections: list[dict], pdf_path: str, on_chapter=None,
+                       unit: str = "paragraph", clauses=None) -> TenderIndex:
+    """切块并按类型建库，并把向量库写到 data/tender_index。
+
+    `unit="paragraph"` 是旧行为（380 字拼段）；`unit="clause"` 用条款树切分，
+    需要同时传 `clauses`（`tender.clauses.build_clauses` 的产物）。
+    """
+    if unit == "clause" and clauses:
+        chunks = chunk_clauses(clauses, pages, sections)
+    else:
+        unit = "paragraph"
+        chunks = chunk_pages(pages, sections)
     grouped = {}
     for c in chunks:
         grouped.setdefault(c["section_type"], []).append(c)
@@ -286,7 +374,7 @@ def build_tender_index(pages: list[dict], sections: list[dict], pdf_path: str, o
         if on_chapter is not None:
             on_chapter(label, len(items))
         stores[typ] = SectionIndex(items)
-    index = TenderIndex(stores, sections, str(pdf_path))
+    index = TenderIndex(stores, sections, str(pdf_path), unit=unit)
     folder = save_tender_index(index)
     print(f"索引建完，已写入 {folder}", flush=True)
     return index

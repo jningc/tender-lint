@@ -74,8 +74,9 @@ def test_index_cache_version_gate(tmp_path, monkeypatch):
     manifest = tmp_path / "data" / "tender_index" / "doc" / "manifest.json"
     manifest.parent.mkdir(parents=True)
     manifest.write_text(json.dumps({"sections": [], "types": []}), encoding="utf-8")
-    assert index_cache_exists("sample/doc.pdf") is False      # 老缓存没版本号 → 必须重建
+    assert index_cache_exists("sample/doc.pdf", unit="paragraph") is False      # 老缓存没版本号 → 必须重建
     manifest.write_text(json.dumps({"index_version": INDEX_VERSION - 1}), encoding="utf-8")
-    assert index_cache_exists("sample/doc.pdf") is False      # 上一版 → 也要重建
+    assert index_cache_exists("sample/doc.pdf", unit="paragraph") is False      # 上一版 → 也要重建
     manifest.write_text(json.dumps({"index_version": INDEX_VERSION}), encoding="utf-8")
-    assert index_cache_exists("sample/doc.pdf") is True
+    assert index_cache_exists("sample/doc.pdf", unit="paragraph") is True
+    assert index_cache_exists("sample/doc.pdf", unit="clause") is False         # 单位不同不复用
