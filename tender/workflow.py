@@ -17,7 +17,7 @@ from langgraph.graph import END, START, StateGraph
 
 from tender.index import TenderIndex, build_tender_index, load_tender_index
 from tender.llm import get_llm
-from tender.parse import page_count, parse_pdf
+from tender.parse import page_count, parse_pdf, pdf_toc
 from tender.sections import TYPE_LABEL, required_types_present, split_sections
 from tender.tables import (
     CailiaoTable,
@@ -199,9 +199,9 @@ def _stamp_pages(rows: list) -> None:
 
 
 def node_feibiao(state: CheckState) -> dict:
-    """废标：只搜邀请、须知、资格。"""
-    print("  [废标] 检索邀请、须知、资格，并调用模型", flush=True)
-    _emit("feibiao", "running", "检索邀请、须知、资格")
+    """废标：搜邀请/须知/资格/评标办法/采购需求/格式六章，用后果词检索。"""
+    print("  [废标] 检索六章（邀请/须知/资格/评标/需求/格式）", flush=True)
+    _emit("feibiao", "running", "检索六章废标线索")
     types = ["invite", "notice", "qualify"]
     miss = [TYPE_LABEL[t] for t in required_types_present(state["index"].sections, types)]
     hits = state["index"].search(
@@ -422,8 +422,8 @@ def _run_check(pdf_path, company_path) -> dict:
     print(f"    {len(pages)} 页", flush=True)
     _emit("parse", "done", f"{len(pages)} 页", page_count=len(pages))
     print("2/4 切章", flush=True)
-    _emit("sections", "running", "按标题切章")
-    sections = split_sections(pages)
+    _emit("sections", "running", "按标题切章（书签优先）")
+    sections = split_sections(pages, toc=pdf_toc(pdf_path))
     for sec in sections:
         label = TYPE_LABEL.get(sec["type"], sec["type"])
         print(f"    {label}  {sec['title']}  p.{sec['start_page']}-{sec['end_page']}", flush=True)

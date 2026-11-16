@@ -21,7 +21,8 @@ from tender.sections import split_sections
 from tender.workflow import _emit
 
 #: 切分单位：paragraph | clause
-DEFAULT_CHUNK_UNIT = "paragraph"
+#: clause = 条款树 + 书签建父子 + 父标题链 context（见 docs/切分策略.md）
+DEFAULT_CHUNK_UNIT = "clause"
 
 
 def chunk_unit() -> str:
@@ -62,7 +63,8 @@ def run(pdf_path, reuse_index: bool = True) -> tuple[ParsedDoc, TenderIndex]:
         pages = parse_pdf(pdf_path)
         _emit("parse", "done", f"{len(pages)} 页", page_count=len(pages))
         _emit("sections", "running", "按标题切章")
-        sections = split_sections(pages)
+        _emit("sections", "running", "按标题切章（书签优先）")
+        sections = split_sections(pages, toc=pdf_toc(pdf_path))
         _emit("sections", "done", f"{len(sections)} 章", sections=sections)
 
         clauses = None
@@ -86,7 +88,7 @@ def run(pdf_path, reuse_index: bool = True) -> tuple[ParsedDoc, TenderIndex]:
         pdf=str(Path(pdf_path).resolve()),
         page_count=n_pages,
         sections=[
-            Section(type=s["type"], title=s["title"],
+            Section(type=s["type"], types=s.get("types") or [s["type"]], title=s["title"],
                     start_page=s["start_page"], end_page=s["end_page"])
             for s in sections
         ],
