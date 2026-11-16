@@ -1,0 +1,137 @@
+{
+  "engine": "v2",
+  "repeats": 3,
+  "at": "20261116-213340",
+  "duration_s": 154.7,
+  "docs": [
+    {
+      "doc": "beijing_road",
+      "runs": 3,
+      "questions": {
+        "bj-bond": "hit",
+        "bj-cap": "hit",
+        "bj-decrypt": "miss",
+        "bj-director": "hit",
+        "bj-material-bond": "hit",
+        "bj-neg-perf-bond": "hit",
+        "bj-price": "hit",
+        "bj-qualification": "hit",
+        "bj-validity": "hit"
+      },
+      "flaky": [],
+      "positive": {
+        "hit": 7,
+        "total": 8
+      },
+      "positive_stable": {
+        "hit": 7,
+        "total": 8
+      },
+      "negative": {
+        "hit": 1,
+        "total": 1
+      },
+      "negative_stable": {
+        "hit": 1,
+        "total": 1
+      },
+      "violated": 0,
+      "markers": {
+        "markers_total": 2,
+        "covered_pages_median": 0,
+        "star_rows_median": 0
+      },
+      "rows_median": 59
+    },
+    {
+      "doc": "chongzuo_green",
+      "runs": 3,
+      "questions": {
+        "cz-bond": "hit",
+        "cz-cap": "miss",
+        "cz-format-bid-sheet": "hit",
+        "cz-neg-perf-bond": "hit",
+        "cz-perf-bond": "hit",
+        "cz-price": "hit"
+      },
+      "flaky": [],
+      "positive": {
+        "hit": 4,
+        "total": 5
+      },
+      "positive_stable": {
+        "hit": 4,
+        "total": 5
+      },
+      "negative": {
+        "hit": 1,
+        "total": 1
+      },
+      "negative_stable": {
+        "hit": 1,
+        "total": 1
+      },
+      "violated": 0,
+      "markers": {
+        "markers_total": 30,
+        "covered_pages_median": 1,
+        "star_rows_median": 1
+      },
+      "rows_median": 66
+    },
+    {
+      "doc": "wenling_video",
+      "runs": 3,
+      "questions": {
+        "wl-bond": "hit",
+        "wl-cap": "hit",
+        "wl-neg-perf-bond": "hit",
+        "wl-perf-bond": "hit",
+        "wl-price": "hit",
+        "wl-validity": "hit"
+      },
+      "flaky": [
+        "wl-bond",
+        "wl-perf-bond"
+      ],
+      "positive": {
+        "hit": 5,
+        "total": 5
+      },
+      "positive_stable": {
+        "hit": 3,
+        "total": 3
+      },
+      "negative": {
+        "hit": 1,
+        "total": 1
+      },
+      "negative_stable": {
+        "hit": 1,
+        "total": 1
+      },
+      "violated": 0,
+      "markers": {
+        "markers_total": 10,
+        "covered_pages_median": 1,
+        "star_rows_median": 1
+      },
+      "rows_median": 108
+    }
+  ],
+  "totals": {
+    "pos_hit": 16,
+    "pos_total": 18,
+    "pos_stable_hit": 14,
+    "pos_stable_total": 16,
+    "neg_hit": 3,
+    "neg_total": 3,
+    "neg_stable_hit": 3,
+    "neg_stable_total": 3,
+    "violated": 0,
+    "flaky": 2
+  },
+  "markers": {
+    "covered_pages": 2
+  }
+}

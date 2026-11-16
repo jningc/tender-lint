@@ -7,7 +7,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from tender.index import chunk_pages, pick_block  # noqa: E402
+from tender.index import INDEX_VERSION, chunk_pages, pick_block  # noqa: E402
 from tender.stages.parse_stage import index_cache_exists  # noqa: E402
 
 TALL = [47.0, 60.0, 548.0, 800.0]     # 740pt 高，超过 A4 的 60%
@@ -75,5 +75,7 @@ def test_index_cache_version_gate(tmp_path, monkeypatch):
     manifest.parent.mkdir(parents=True)
     manifest.write_text(json.dumps({"sections": [], "types": []}), encoding="utf-8")
     assert index_cache_exists("sample/doc.pdf") is False      # 老缓存没版本号 → 必须重建
-    manifest.write_text(json.dumps({"index_version": 2}), encoding="utf-8")
+    manifest.write_text(json.dumps({"index_version": INDEX_VERSION - 1}), encoding="utf-8")
+    assert index_cache_exists("sample/doc.pdf") is False      # 上一版 → 也要重建
+    manifest.write_text(json.dumps({"index_version": INDEX_VERSION}), encoding="utf-8")
     assert index_cache_exists("sample/doc.pdf") is True

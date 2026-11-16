@@ -13,7 +13,7 @@ from rank_bm25 import BM25Okapi
 
 from tender.sections import TYPE_LABEL, section_of_page
 
-INDEX_VERSION = 2  # 2 = 段内存块级 bbox（1 只有整段并集；旧缓存必须重建）
+INDEX_VERSION = 3  # 3 = 块带字号/页眉标记（2 只有块级 bbox；旧缓存必须重建）
 
 DEFAULT_INDEX_ROOT = Path(__file__).resolve().parent.parent / "data" / "tender_index"
 DEFAULT_EMBED_MODEL = "BAAI/bge-small-zh-v1.5"
@@ -82,7 +82,14 @@ def chunk_pages(pages: list[dict], sections: list[dict], target_len: int = 380) 
             "section_type": sec["type"],
             "section_title": sec["title"],
             "bbox": box,  # 段的并集，作兜底
-            "blocks": [{"text": b["text"], "bbox": list(b["bbox"])} for b in buf],
+            # 块的版面线索跟着进索引：切条款要用字号，去噪要用页眉标。
+            # 这里只搬运字段，pick_block 的选块逻辑不动。
+            "blocks": [{
+                "text": b["text"],
+                "bbox": list(b["bbox"]),
+                "max_size": b.get("max_size"),
+                "is_header": bool(b.get("is_header")),
+            } for b in buf],
         })
         buf, buf_len = [], 0
 

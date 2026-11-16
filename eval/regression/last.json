@@ -1,8 +1,8 @@
 {
   "engine": "v2",
   "repeats": 3,
-  "at": "20261115-204254",
-  "duration_s": 162.5,
+  "at": "20261116-213340",
+  "duration_s": 154.7,
   "docs": [
     {
       "doc": "beijing_road",
@@ -41,7 +41,7 @@
         "covered_pages_median": 0,
         "star_rows_median": 0
       },
-      "rows_median": 57
+      "rows_median": 59
     },
     {
       "doc": "chongzuo_green",
@@ -77,7 +77,7 @@
         "covered_pages_median": 1,
         "star_rows_median": 1
       },
-      "rows_median": 63
+      "rows_median": 66
     },
     {
       "doc": "wenling_video",
@@ -91,6 +91,7 @@
         "wl-validity": "hit"
       },
       "flaky": [
+        "wl-bond",
         "wl-perf-bond"
       ],
       "positive": {
@@ -98,8 +99,8 @@
         "total": 5
       },
       "positive_stable": {
-        "hit": 4,
-        "total": 4
+        "hit": 3,
+        "total": 3
       },
       "negative": {
         "hit": 1,
@@ -115,20 +116,20 @@
         "covered_pages_median": 1,
         "star_rows_median": 1
       },
-      "rows_median": 109
+      "rows_median": 108
     }
   ],
   "totals": {
     "pos_hit": 16,
     "pos_total": 18,
-    "pos_stable_hit": 15,
-    "pos_stable_total": 17,
+    "pos_stable_hit": 14,
+    "pos_stable_total": 16,
     "neg_hit": 3,
     "neg_total": 3,
     "neg_stable_hit": 3,
     "neg_stable_total": 3,
     "violated": 0,
-    "flaky": 1
+    "flaky": 2
   },
   "markers": {
     "covered_pages": 2
