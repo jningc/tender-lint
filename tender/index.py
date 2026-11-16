@@ -13,6 +13,8 @@ from rank_bm25 import BM25Okapi
 
 from tender.sections import TYPE_LABEL, section_of_page
 
+INDEX_VERSION = 2  # 2 = 段内存块级 bbox（1 只有整段并集；旧缓存必须重建）
+
 DEFAULT_INDEX_ROOT = Path(__file__).resolve().parent.parent / "data" / "tender_index"
 DEFAULT_EMBED_MODEL = "BAAI/bge-small-zh-v1.5"
 
@@ -37,8 +39,27 @@ def _tokenize(text: str) -> list[str]:
     return [ch for ch in text if not ch.isspace()]
 
 
+def pick_block(query: str, blocks: list[dict], page_height: float = 842.0) -> dict | None:
+    """在段内挑和 query 字面重合最多的那一块——比整段并集窄得多。
+
+    同分时挑更矮的块（更可能是一行条款而不是一段正文）。返回
+    {"bbox": [...], "kind": "block"|"page"}；没有块返回 None。
+    """
+    if not blocks:
+        return None
+    q = set(_tokenize(query))
+    best, best_score, best_h = None, -1, float("inf")
+    for b in blocks:
+        score = len(q & set(_tokenize(b.get("text") or "")))
+        h = b["bbox"][3] - b["bbox"][1]
+        if score > best_score or (score == best_score and h < best_h):
+            best, best_score, best_h = b, score, h
+    kind = "page" if best_h > page_height * 0.6 else "block"
+    return {"bbox": list(best["bbox"]), "kind": kind}
+
+
 def chunk_pages(pages: list[dict], sections: list[dict], target_len: int = 380) -> list[dict]:
-    """章内按块拼段，不跨页，保留 bbox。"""
+    """章内按块拼段，不跨页；保留每个块的 bbox，供检索时挑最准的那一块。"""
     chunks = []
     buf = []
     buf_len = 0
@@ -56,10 +77,12 @@ def chunk_pages(pages: list[dict], sections: list[dict], target_len: int = 380) 
         chunks.append({
             "text": text,
             "page": page["page"],
+            "page_height": page.get("height") or 842.0,
             "source": page.get("source"),
             "section_type": sec["type"],
             "section_title": sec["title"],
-            "bbox": box,
+            "bbox": box,  # 段的并集，作兜底
+            "blocks": [{"text": b["text"], "bbox": list(b["bbox"])} for b in buf],
         })
         buf, buf_len = [], 0
 
@@ -88,9 +111,11 @@ class SectionIndex:
             self.bm25 = BM25Okapi([_tokenize(c["text"]) for c in chunks])
             metadatas = [{
                 "page": c["page"],
+                "page_height": c.get("page_height") or 842.0,
                 "section_type": c["section_type"],
                 "section_title": c["section_title"],
                 "bbox": ",".join(str(x) for x in c["bbox"]),
+                "blocks": json.dumps(c.get("blocks") or [], ensure_ascii=False),
                 "source": c.get("source"),
             } for c in chunks]
             self.vs = FAISS.from_texts(
@@ -115,10 +140,12 @@ class SectionIndex:
             chunks.append({
                 "text": doc.page_content,
                 "page": doc.metadata.get("page"),
+                "page_height": doc.metadata.get("page_height") or 842.0,
                 "source": doc.metadata.get("source"),
                 "section_type": doc.metadata.get("section_type"),
                 "section_title": doc.metadata.get("section_title"),
                 "bbox": bbox,
+                "blocks": json.loads(doc.metadata.get("blocks") or "[]"),
             })
         self = cls.__new__(cls)
         self.chunks = chunks
@@ -126,8 +153,22 @@ class SectionIndex:
         self.bm25 = BM25Okapi([_tokenize(c["text"]) for c in chunks]) if chunks else None
         return self
 
+    def _hit(self, query: str, chunk: dict) -> dict:
+        """把段变成检索命中：bbox 换成段内最匹配的块，块级框才算「能定位」。"""
+        precise = pick_block(query, chunk.get("blocks") or [], chunk.get("page_height") or 842.0)
+        return {
+            "text": chunk["text"],
+            "page": chunk["page"],
+            "source": chunk.get("source"),
+            "section_type": chunk.get("section_type"),
+            "section_title": chunk.get("section_title"),
+            "bbox": precise["bbox"] if precise else chunk["bbox"],
+            "bbox_union": chunk["bbox"],
+            "bbox_kind": precise["kind"] if precise else "chunk",
+        }
+
     def search(self, query: str, k: int = 4) -> list[dict]:
-        """先 BM25 再向量，合并去重。"""
+        """先 BM25 再向量，合并去重。命中里带块级 bbox。"""
         if not self.chunks:
             return []
         scored = self.bm25.get_scores(_tokenize(query))
@@ -141,7 +182,7 @@ class SectionIndex:
             if key in seen:
                 continue
             seen.add(key)
-            picked.append(c)
+            picked.append(self._hit(query, c))
         for doc in vec_hits:
             key = (doc.metadata.get("page"), doc.page_content[:40])
             if key in seen:
@@ -151,14 +192,16 @@ class SectionIndex:
             raw = doc.metadata.get("bbox") or ""
             if raw:
                 bbox = [float(x) for x in raw.split(",")]
-            picked.append({
+            picked.append(self._hit(query, {
                 "text": doc.page_content,
                 "page": doc.metadata.get("page"),
+                "page_height": doc.metadata.get("page_height") or 842.0,
                 "source": doc.metadata.get("source"),
                 "section_type": doc.metadata.get("section_type"),
                 "section_title": doc.metadata.get("section_title"),
                 "bbox": bbox,
-            })
+                "blocks": json.loads(doc.metadata.get("blocks") or "[]"),
+            }))
         return picked[: k * 2]
 
 
@@ -197,6 +240,7 @@ def save_tender_index(index: TenderIndex) -> Path:
         store.vs.save_local(str(folder))
         saved.append(typ)
     manifest = {
+        "index_version": INDEX_VERSION,
         "pdf_path": index.pdf_path,
         "sections": index.sections,
         "types": saved,

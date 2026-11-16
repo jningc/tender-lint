@@ -4,18 +4,26 @@
 这一段的产物是 `ParsedDoc`，另外把索引对象带出来——索引是实现细节，不进契约。
 """
 
+import json
 from pathlib import Path
 from typing import Optional
 
 from tender.contracts import ParsedDoc, Section
-from tender.index import TenderIndex, build_tender_index, load_tender_index
+from tender.index import INDEX_VERSION, TenderIndex, build_tender_index, load_tender_index
 from tender.parse import page_count, parse_pdf
 from tender.sections import split_sections
 from tender.workflow import _emit
 
 
 def index_cache_exists(pdf_path) -> bool:
-    return (Path("data") / "tender_index" / Path(pdf_path).stem / "manifest.json").exists()
+    """缓存存在且版本一致才算可用——索引格式变了必须重建，否则拿旧框当新框。"""
+    manifest = Path("data") / "tender_index" / Path(pdf_path).stem / "manifest.json"
+    if not manifest.exists():
+        return False
+    try:
+        return json.loads(manifest.read_text(encoding="utf-8")).get("index_version") == INDEX_VERSION
+    except Exception:
+        return False
 
 
 def run(pdf_path, reuse_index: bool = True) -> tuple[ParsedDoc, TenderIndex]:
