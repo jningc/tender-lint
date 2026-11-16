@@ -1,0 +1,201 @@
+# 术语表（C1）
+#
+# 每条别名都在样本 PDF 里真实出现过，`source` 记首次出现的文档和物理页。
+# 不允许凭想象加词——这是术语表能不能进简历的分水岭。
+#
+# 两类条目：
+#   aliases  安全别名：替换成标准词后语义不变，可用于判定
+#   weak     泛词：能扩召回，但会误命中别的概念（「保证金」会命中履约保证金），
+#            只用于检索扩展，不用于改写原文
+#
+# 生成依据：scripts/terms_probe.py 实测三份样本的命中次数与首次页码。
+
+version: 1
+source_docs: [beijing_road, chongzuo_green, wenling_video]
+
+terms:
+  投标保证金:
+    table: feibiao
+    field: condition
+    aliases:
+      - {word: 投标担保, source: beijing_road:p80}
+      - {word: 磋商保证金, source: beijing_road:p80}
+      - {word: 投标保证金凭证, source: beijing_road:p17}
+    weak: [保证金]
+    exclusive_with: [履约保证金]
+    note: 与履约保证金是两回事，混用会把履约条款判成废标条件
+
+  履约保证金:
+    table: feibiao
+    field: condition
+    aliases:
+      - {word: 履约保函, source: chongzuo_green:p56}
+      - {word: 质量保证金, source: chongzuo_green:p56}
+    weak: []
+    exclusive_with: [投标保证金]
+    note: 履约阶段约束，通常不该进废标表
+
+  最高限价:
+    table: feibiao
+    field: condition
+    aliases:
+      - {word: 采购预算, source: beijing_road:p20}
+      - {word: 预算金额, source: beijing_road:p3}
+    weak: [限价]
+    note: 报价超过它即废标，三个词在公告里混用
+
+  联合体:
+    table: feibiao
+    field: condition
+    aliases:
+      - {word: 联合体投标, source: beijing_road:p3}
+      - {word: 联合体协议, source: beijing_road:p60}
+      - {word: 联合投标, source: chongzuo_green:p23}
+    weak: []
+    note: 「接受/不接受联合体」是同一条判定的正反两面
+
+  实质性要求:
+    table: feibiao
+    field: condition
+    aliases:
+      - {word: 实质性响应, source: beijing_road:p15}
+      - {word: 实质性内容, source: beijing_road:p16}
+    weak: []
+    # 未在三份样本出现（扩样本后再启用）
+    pending: [实质性条款]
+    note: 带 ★/▲ 的条款即实质性要求，不满足就废标
+
+  信用记录:
+    table: feibiao
+    field: condition
+    aliases:
+      - {word: 信用信息, source: beijing_road:p4}
+      - {word: 失信被执行人, source: beijing_road:p4}
+      - {word: 信用中国, source: beijing_road:p4}
+    weak: []
+    note: 三份样本都用这三种写法之一
+
+  注册监理工程师:
+    table: feibiao
+    field: condition
+    aliases:
+      - {word: 总监理工程师, source: beijing_road:p4}
+    weak: []
+    note: 北京样本要求「注册专业市政公用工程」并须任命书
+
+  营业执照:
+    table: cailiao
+    field: material
+    aliases:
+      - {word: 营业执照副本, source: chongzuo_green:p40}
+    weak: []
+    note: 复印件须加盖公章，否则按无效投标
+
+  社会保险:
+    table: cailiao
+    field: material
+    aliases: []
+    weak: [社保]
+    pending: [社会保险缴纳证明]
+    note: 「社保」是投标文件里的口语写法
+
+  类似业绩:
+    table: cailiao
+    field: material
+    aliases:
+      - {word: 类似项目业绩, source: beijing_road:p33}
+    pending: [同类业绩]
+    weak: [业绩]
+    note: 「业绩」单独出现时可能是加分项，不是资格门槛
+
+  授权委托书:
+    table: cailiao
+    field: material
+    aliases:
+      - {word: 授权书, source: beijing_road:p18}
+    pending: [法定代表人授权书]
+    weak: []
+    note: 法人和代理人必须签字，否则作无效投标处理
+
+  声明函:
+    table: cailiao
+    field: material
+    aliases:
+      - {word: 中小企业声明函, source: beijing_road:p73}
+      - {word: 资格声明书, source: beijing_road:p72}
+      - {word: 投标声明书, source: wenling_video:p11}
+    weak: []
+    note: 资格声明书是实质性格式，缺失即无效
+
+  价格分:
+    table: pingfen
+    field: item
+    aliases:
+      - {word: 报价得分, source: beijing_road:p33}
+      - {word: 投标报价分, source: chongzuo_green:p46}
+      - {word: 价格评审, source: beijing_road:p13}
+    weak: []
+    note: 北京用公式算，崇左用档次描述
+
+  技术分:
+    table: pingfen
+    field: item
+    aliases:
+      - {word: 技术评分, source: wenling_video:p7}
+      - {word: 技术部分, source: beijing_road:p33}
+    weak: []
+    note: 三份样本的技术分写法各不相同
+
+  商务分:
+    table: pingfen
+    field: item
+    aliases:
+      - {word: 商务部分, source: beijing_road:p33}
+    weak: []
+    exclusive_with: []
+    note: 只在评标办法章里出现
+
+  投标截止时间:
+    table: shijian
+    field: name
+    aliases:
+      - {word: 提交投标文件截止时间, source: beijing_road:p4}
+      - {word: 投标文件递交截止时间, source: chongzuo_green:p7}
+    weak: []
+    note: 与开标时间常常同一点，但不可合并成一条
+
+  获取招标文件时间:
+    table: shijian
+    field: name
+    aliases:
+      - {word: 获取采购文件, source: chongzuo_green:p5}
+    pending: [领取招标文件]
+    weak: []
+    note: 逾期未获取的采购包，投标无效
+
+  付款方式:
+    table: hetong
+    field: item
+    aliases:
+      - {word: 支付方式, source: beijing_road:p54}
+    pending: [结算方式]
+    weak: []
+    note: 合同章里的价款支付条款
+
+  违约责任:
+    table: hetong
+    field: item
+    aliases:
+      - {word: 违约金, source: beijing_road:p57}
+      - {word: 赔偿责任, source: beijing_road:p57}
+    weak: []
+    note: 中标后的约束，与废标条件无关
+
+  验收:
+    table: hetong
+    field: item
+    aliases:
+      - {word: 竣工验收, source: beijing_road:p36}
+    pending: [验收标准]
+    weak: [验收]
+    note: 演示时容易和「符合性审查」混

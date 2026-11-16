@@ -1,0 +1,36 @@
+{
+  "_说明": "C1 术语表题集。三类：synonym（同义改写应归一）、distinct（近似但不同不该归一）、direction（否定/方向陷阱）。direction 类当前 normalize 处理不了（同义词替换不管否定），标 known_gap，不计入 80% 的通过率，留给 C3 规则库。",
+  "_schema": {
+    "id": "唯一标识",
+    "kind": "synonym | distinct | direction",
+    "a": "文本 A（通常取自招标文件原文）",
+    "b": "文本 B（通常取自投标文件/公司情况的写法）",
+    "same": "normalize 之后是否应该相同",
+    "note": "这条在验什么",
+    "known_gap": "可选，true 表示当前实现已知处理不了"
+  },
+  "cases": [
+    {"id": "s01", "kind": "synonym", "a": "投标人须缴纳磋商保证金", "b": "投标人须缴纳投标保证金", "same": true, "note": "北京样本 p80 用「磋商保证金」，公告里叫「投标保证金」"},
+    {"id": "s02", "kind": "synonym", "a": "可提交投标担保", "b": "可提交投标保证金", "same": true, "note": "担保/保证金在样本里是同义"},
+    {"id": "s03", "kind": "synonym", "a": "采购预算 47 万元", "b": "最高限价 47 万元", "same": true, "note": "公告里两种说法混用"},
+    {"id": "s04", "kind": "synonym", "a": "本项目不接受联合体投标", "b": "本项目不接受联合体", "same": true, "note": "联合体投标 = 联合体"},
+    {"id": "s05", "kind": "synonym", "a": "实质性响应招标文件要求", "b": "实质性要求须满足", "same": true, "note": "实质性的三种写法之一"},
+    {"id": "s06", "kind": "synonym", "a": "信用中国网站查询失信被执行人", "b": "信用记录须符合要求", "same": true, "note": "信用三种写法"},
+    {"id": "s07", "kind": "synonym", "a": "报价得分按公式计算", "b": "价格分按公式计算", "same": true, "note": "评分项同义"},
+    {"id": "s08", "kind": "synonym", "a": "提交投标文件截止时间为 8 月 18 日", "b": "投标截止时间为 8 月 18 日", "same": true, "note": "时间节点同义"},
+    {"id": "s09", "kind": "synonym", "a": "支付方式为按进度付款", "b": "付款方式为按进度付款", "same": true, "note": "合同章同义"},
+    {"id": "s10", "kind": "synonym", "a": "应提交中小企业声明函", "b": "应提交声明函", "same": true, "note": "声明函是上位词"},
+
+    {"id": "d01", "kind": "distinct", "a": "履约保证金按合同价 5%", "b": "投标保证金 8000 元", "same": false, "note": "核心防错：履约 ≠ 投标，混了会把履约条款判成废标条件"},
+    {"id": "d02", "kind": "distinct", "a": "履约保函由银行出具", "b": "投标保证金凭证须上传", "same": false, "note": "同上，别名层也不许串"},
+    {"id": "d03", "kind": "distinct", "a": "技术分 60 分", "b": "商务分 10 分", "same": false, "note": "两个评分项不能归一"},
+    {"id": "d04", "kind": "distinct", "a": "投标有效期 90 天", "b": "投标保证金有效期 90 天", "same": false, "note": "有效期的两种用法不同"},
+    {"id": "d05", "kind": "distinct", "a": "合同履行期限为一年", "b": "投标截止时间为 8 月 18 日", "same": false, "note": "时间节点不能混"},
+    {"id": "d06", "kind": "distinct", "a": "竣工验收合格后支付尾款", "b": "符合性审查通过后进入评分", "same": false, "note": "验收 ≠ 符合性审查"},
+
+    {"id": "n01", "kind": "direction", "a": "业绩不得低于 3 年", "b": "业绩不超过 3 年", "same": false, "note": "方向相反，同义词替换解决不了", "known_gap": true},
+    {"id": "n02", "kind": "direction", "a": "不接受联合体投标", "b": "接受联合体投标", "same": false, "note": "否定词丢失会导致判定反向", "known_gap": true},
+    {"id": "n03", "kind": "direction", "a": "报价不得高于最高限价", "b": "报价可高于最高限价", "same": false, "note": "同上", "known_gap": true},
+    {"id": "n04", "kind": "direction", "a": "投标保证金不予退还的情形", "b": "投标保证金应予退还的情形", "same": false, "note": "否定词在修饰关系里", "known_gap": true}
+  ]
+}
