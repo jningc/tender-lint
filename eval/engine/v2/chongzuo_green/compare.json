@@ -1,19 +1,19 @@
 {
   "doc": "chongzuo_green",
   "output": "/Users/ning/Desktop/tender-lint/eval/engine/v2/chongzuo_green/tables.json",
-  "rows": 62,
+  "rows": 64,
   "rows_without_page": 1,
   "counts": {
     "total": 6,
     "positive": 5,
     "negative": 1,
-    "hit": 4,
+    "hit": 5,
     "miss": 1,
     "absent": 0,
-    "violated": 1,
+    "violated": 0,
     "verdict_checked": 2,
     "pos_hit": 4,
-    "neg_hit": 0
+    "neg_hit": 1
   },
   "markers": {
     "markers_total": 30,
@@ -65,15 +65,27 @@
         "材料对照"
       ],
       "pages": [
-        6
+        3,
+        5,
+        6,
+        7,
+        25,
+        31,
+        32
       ],
       "expect_pages": [
         6,
         25,
         32
       ],
-      "extra_pages": [],
+      "extra_pages": [
+        3,
+        5,
+        7,
+        31
+      ],
       "verdicts": [
+        "人工看",
         "无须提供"
       ],
       "expect_verdict": [
@@ -124,16 +136,13 @@
         "评分对照"
       ],
       "pages": [
-        45,
         46
       ],
       "expect_pages": [
         46,
         47
       ],
-      "extra_pages": [
-        45
-      ],
+      "extra_pages": [],
       "verdicts": [],
       "expect_verdict": null,
       "note": "价格分 20 分；评分表在 p46 起（含「基准价，其价格分为满分」），公式「（评标基准价／评标报价）×20」在 p47 续页"
@@ -199,24 +208,16 @@
       "id": "cz-neg-perf-bond",
       "doc": "chongzuo_green",
       "kind": "negative",
-      "status": "violated",
+      "status": "hit",
       "reason": "",
-      "tables": [
-        "废标对照"
-      ],
+      "tables": [],
       "expect_tables": [
         "废标对照"
       ],
-      "pages": [
-        26
-      ],
+      "pages": [],
       "expect_pages": [],
-      "extra_pages": [
-        26
-      ],
-      "verdicts": [
-        "满足"
-      ],
+      "extra_pages": [],
+      "verdicts": [],
       "expect_verdict": null,
       "note": "前附表 35 写了履约保证金 5%，但它属于中标后合同约束，不该进废标表（在废标表出现即算违规）"
     }

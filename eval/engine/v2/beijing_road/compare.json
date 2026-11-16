@@ -168,7 +168,8 @@
       ],
       "pages": [
         3,
-        8
+        8,
+        17
       ],
       "expect_pages": [
         3,
@@ -176,7 +177,9 @@
         26,
         43
       ],
-      "extra_pages": [],
+      "extra_pages": [
+        17
+      ],
       "verdicts": [
         "满足"
       ],
@@ -229,6 +232,7 @@
       "status": "miss",
       "reason": "page",
       "tables": [
+        "废标对照",
         "时间节点"
       ],
       "expect_tables": [
@@ -252,7 +256,9 @@
         16,
         19
       ],
-      "verdicts": [],
+      "verdicts": [
+        "人工看"
+      ],
       "expect_verdict": "人工看",
       "note": "解密时间 30 分钟，只在资料表 18.2 出现；线上开标的时间约束"
     },

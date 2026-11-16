@@ -4,12 +4,12 @@
     {
       "doc": "beijing_road",
       "rows": {
-        "feibiao": 14,
+        "feibiao": 12,
         "pingfen": 9,
         "cailiao": 10,
         "kongwei": 5,
         "shijian": 10,
-        "hetong": 10
+        "hetong": 12
       },
       "contracts": {
         "clauses": 58,
@@ -37,53 +37,53 @@
     {
       "doc": "chongzuo_green",
       "rows": {
-        "feibiao": 17,
+        "feibiao": 18,
         "pingfen": 4,
-        "cailiao": 13,
-        "kongwei": 10,
+        "cailiao": 15,
+        "kongwei": 7,
         "shijian": 11,
-        "hetong": 7
+        "hetong": 9
       },
       "contracts": {
-        "clauses": 61,
-        "findings": 36,
+        "clauses": 64,
+        "findings": 42,
         "rejects": 1,
         "verified": {
-          "checked": 36,
-          "passed": 36,
-          "rejected": 0
+          "checked": 42,
+          "passed": 41,
+          "rejected": 1
         }
       },
       "counts": {
         "total": 6,
         "positive": 5,
         "negative": 1,
-        "hit": 4,
+        "hit": 5,
         "miss": 1,
         "absent": 0,
-        "violated": 1,
+        "violated": 0,
         "verdict_checked": 2,
         "pos_hit": 4,
-        "neg_hit": 0
+        "neg_hit": 1
       }
     },
     {
       "doc": "wenling_video",
       "rows": {
-        "feibiao": 19,
+        "feibiao": 14,
         "pingfen": 12,
-        "cailiao": 16,
+        "cailiao": 17,
         "kongwei": 7,
-        "shijian": 11,
-        "hetong": 12
+        "shijian": 13,
+        "hetong": 7
       },
       "contracts": {
-        "clauses": 77,
-        "findings": 47,
+        "clauses": 70,
+        "findings": 38,
         "rejects": 0,
         "verified": {
-          "checked": 47,
-          "passed": 47,
+          "checked": 38,
+          "passed": 38,
           "rejected": 0
         }
       },
@@ -91,20 +91,20 @@
         "total": 6,
         "positive": 5,
         "negative": 1,
-        "hit": 4,
-        "miss": 2,
+        "hit": 5,
+        "miss": 1,
         "absent": 0,
         "violated": 0,
         "verdict_checked": 3,
-        "pos_hit": 3,
+        "pos_hit": 4,
         "neg_hit": 1
       }
     }
   ],
   "total": {
-    "pos_hit": 14,
+    "pos_hit": 15,
     "positive": 18,
-    "neg_hit": 2,
+    "neg_hit": 3,
     "negative": 3
   }
 }
