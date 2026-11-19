@@ -160,7 +160,7 @@ def test_evidence_ok_rejects_page_tall():
     assert not evidence_ok(c)
 
 
-# ---------- 7. 手写样例必须能过契约（docs/契约样例.md 引的就是这几个文件） ----------
+# ---------- 7. 手写样例必须能过契约（docs/归档/契约样例.md 引的就是这几个文件） ----------
 
 SAMPLES = PROJECT_ROOT / "eval" / "contracts" / "samples"
 

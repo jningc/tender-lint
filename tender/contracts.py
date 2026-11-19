@@ -10,7 +10,7 @@
 3. **页码一律 PDF 物理页**（第 1 页 = 封面）。页脚的印刷页码由渲染层换算，
    不进契约——beijing、chongzuo 两者差 2 页，wenling 一致。
 
-对应文档：`docs/契约样例.md`（p8 保证金那条的手写样例）、`docs/迁移计划.md` 阶段 1。
+对应文档：`docs/归档/契约样例.md`（p8 保证金那条的手写样例）、`docs/归档/迁移计划.md` 阶段 1。
 """
 
 from typing import Literal, Optional
@@ -73,6 +73,8 @@ class ParsedDoc(BaseModel):
 
 class Section(BaseModel):
     type: str
+    #: 一章可以有多个类型（「资格审查与评标办法」同时进 qualify 和 score 库）
+    types: list[str] = Field(default_factory=list)
     title: str
     start_page: int = Field(ge=1)
     end_page: int = Field(ge=1)

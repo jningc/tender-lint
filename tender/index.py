@@ -12,9 +12,9 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from rank_bm25 import BM25Okapi
 
 from tender.clauses import prefix_of
-from tender.sections import TYPE_LABEL, section_of_page
+from tender.sections import TYPE_LABEL, section_of_page, types_of
 
-INDEX_VERSION = 6  # 6 = 条款模式 context 改父标题链（5 是滑动窗口，4 是整组兄弟）
+INDEX_VERSION = 9  # 9 = 索引里带表格结构；8 及以下旧缓存必须重建
 
 #: 条款模式的返回上下文：父标题链 + 本条，字数上限
 #: 拼过「同前缀整组兄弟」（单条 3000 字，正例掉到 10/18），也试过滑动窗口，
@@ -87,6 +87,7 @@ def chunk_pages(pages: list[dict], sections: list[dict], target_len: int = 380) 
             "page_height": page.get("height") or 842.0,
             "source": page.get("source"),
             "section_type": sec["type"],
+            "section_types": types_of(sec),
             "section_title": sec["title"],
             "bbox": box,  # 段的并集，作兜底
             # 块的版面线索跟着进索引：切条款要用字号，去噪要用页眉标。
@@ -152,6 +153,7 @@ def chunk_clauses(nodes, pages: list[dict], sections: list[dict]) -> list[dict]:
             "page_height": heights.get(node.page_start) or 842.0,
             "source": source,
             "section_type": node.section or sec.get("type"),
+            "section_types": types_of(sec),
             "section_title": sec.get("title") or "",
             "bbox": list(node.bbox),          # 条款级并集，不再是段并集
             "blocks": [{                       # 让 pick_block 有东西可选
@@ -291,11 +293,13 @@ class TenderIndex:
     """按章类型分库的总索引。"""
 
     def __init__(self, stores: dict[str, SectionIndex], sections: list[dict], pdf_path: str,
-                 unit: str = "paragraph"):
+                 unit: str = "paragraph", tables: list | None = None):
         self.stores = stores
         self.sections = sections
         self.pdf_path = pdf_path
         self.unit = unit
+        #: 解析阶段的表（`tabular.Table`），评分表那条线从这里取，不参与 BM25/向量
+        self.tables = tables or []
 
     def search(self, query: str, section_types: list[str], k: int = 4) -> list[dict]:
         """只在指定章类型里搜。"""
@@ -329,11 +333,16 @@ def save_tender_index(index: TenderIndex) -> Path:
         "pdf_path": index.pdf_path,
         "sections": index.sections,
         "types": saved,
+        "table_count": len(index.tables),
     }
     (root / "manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    # 表要放在 rmtree 之后写，否则重建索引时会被一起删掉
+    if index.tables:
+        from tender import tabular
+        tabular.dump(index.tables, root, Path(index.pdf_path).stem)
     return root
 
 
@@ -347,16 +356,21 @@ def load_tender_index(pdf_path) -> TenderIndex:
     stores = {}
     for typ in manifest.get("types") or []:
         stores[typ] = SectionIndex.load(root / typ)
+    from tender import tabular
+    tables = tabular.load_tables(root, Path(pdf_path).stem)
     return TenderIndex(stores, manifest.get("sections") or [], str(pdf_path),
-                       unit=manifest.get("chunk_unit") or "paragraph")
+                       unit=manifest.get("chunk_unit") or "paragraph", tables=tables)
 
 
 def build_tender_index(pages: list[dict], sections: list[dict], pdf_path: str, on_chapter=None,
-                       unit: str = "paragraph", clauses=None) -> TenderIndex:
+                       unit: str = "paragraph", clauses=None, tables=None) -> TenderIndex:
     """切块并按类型建库，并把向量库写到 data/tender_index。
 
     `unit="paragraph"` 是旧行为（380 字拼段）；`unit="clause"` 用条款树切分，
     需要同时传 `clauses`（`tender.clauses.build_clauses` 的产物）。
+
+    `tables` 是 `tabular.Table` 列表，跟着索引一起落盘——评分表那条线
+    直接读它，不参与 BM25/向量。
     """
     if unit == "clause" and clauses:
         chunks = chunk_clauses(clauses, pages, sections)
@@ -365,7 +379,9 @@ def build_tender_index(pages: list[dict], sections: list[dict], pdf_path: str, o
         chunks = chunk_pages(pages, sections)
     grouped = {}
     for c in chunks:
-        grouped.setdefault(c["section_type"], []).append(c)
+        # 一章多类型时，同一个 chunk 进多个库（资格审查与评标办法要两边都搜得到）
+        for typ in (c.get("section_types") or [c["section_type"]]):
+            grouped.setdefault(typ, []).append(c)
     print(f"切块 {len(chunks)} 段，开始按章建向量索引", flush=True)
     stores = {}
     for typ, items in grouped.items():
@@ -374,7 +390,7 @@ def build_tender_index(pages: list[dict], sections: list[dict], pdf_path: str, o
         if on_chapter is not None:
             on_chapter(label, len(items))
         stores[typ] = SectionIndex(items)
-    index = TenderIndex(stores, sections, str(pdf_path), unit=unit)
+    index = TenderIndex(stores, sections, str(pdf_path), unit=unit, tables=tables or [])
     folder = save_tender_index(index)
     print(f"索引建完，已写入 {folder}", flush=True)
     return index
