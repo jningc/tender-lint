@@ -86,5 +86,5 @@ def test_row_keeps_its_own_page():
     merged = [t for t in tables if t.kind == "pingfen" and t.continued]
     assert merged, "chongzuo 的评分表应该被合并"
     pages = {r.page for r in merged[0].rows}
-    assert pages == {46, 47}, f"行级页码应为 46/47，实测 {pages}"
+    assert pages == {46, 47, 48}, f"行级页码应为 46/47/48，实测 {pages}"
     assert all(r.bbox and len(r.bbox) == 4 for r in merged[0].rows)
