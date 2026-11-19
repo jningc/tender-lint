@@ -15,10 +15,9 @@ from typing import Annotated, TypedDict
 import yaml
 from langgraph.graph import END, START, StateGraph
 
-from tender.index import TenderIndex, build_tender_index, load_tender_index
+from tender.index import TenderIndex
 from tender.llm import get_llm
-from tender.parse import page_count, parse_pdf, pdf_toc
-from tender.sections import TYPE_LABEL, required_types_present, split_sections
+from tender.sections import TYPE_LABEL, required_types_present
 from tender.tables import (
     CailiaoTable,
     FeibiaoRow,
@@ -33,6 +32,10 @@ from tender.tables import (
 
 _REF_HINT = re.compile(r"(前附表|资料表|详见第|见第.{0,8}章|按第.{0,8}章|见本招标文件)")
 _STAR_RE = re.compile(r"[★▲＊*]")
+#: 评标办法正文里的价格分公式：等号 + 乘除号 + 报价/基准价（见 docs/计划/评分规则两种载体.md）
+_FORMULA_EQ = re.compile(r"[=＝]")
+_FORMULA_OP = re.compile(r"[×＊*／/]")
+_FORMULA_WORD = re.compile(r"报价|基准价|价格分|得分")
 # 网页核对时由 run_check 设上；命令行不设，_emit 直接返回
 _progress_cb: ContextVar = ContextVar("tender_progress", default=None)
 
@@ -238,8 +241,74 @@ def node_feibiao(state: CheckState) -> dict:
     }
 
 
+def _looks_score_formula(text: str) -> bool:
+    """评标办法里的价格分公式：等号、乘除、报价/基准价同时出现。"""
+    if not text:
+        return False
+    if not _FORMULA_EQ.search(text) or not _FORMULA_OP.search(text):
+        return False
+    return bool(_FORMULA_WORD.search(text))
+
+
+def _formula_hits(index: TenderIndex, types: list[str]) -> list[dict]:
+    """score 章内硬扫公式，不靠 BM25 词频。短算式（温岭 p18）否则排不进 top-k。"""
+    hits = []
+    seen = set()
+    for typ in types:
+        store = index.stores.get(typ)
+        if store is None:
+            continue
+        for chunk in store.chunks or []:
+            needle = ""
+            for block in chunk.get("blocks") or []:
+                bt = block.get("text") or ""
+                if _looks_score_formula(bt):
+                    needle = bt
+                    break
+            if not needle and _looks_score_formula(chunk.get("text") or ""):
+                needle = chunk["text"]
+            if not needle:
+                continue
+            key = (chunk.get("page"), needle[:40])
+            if key in seen:
+                continue
+            seen.add(key)
+            hits.append(store._hit(needle, chunk))
+    hits.sort(key=lambda h: h.get("page") or 0)
+    return hits
+
+
+def _merge_hits(*groups: list[dict]) -> list[dict]:
+    """多路命中按页+原文去重，保留先出现的（公式扫优先于 BM25）。"""
+    seen, out = set(), []
+    for group in groups:
+        for h in group or []:
+            key = (h.get("page"), (h.get("text") or "")[:40])
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(h)
+    return out
+
+
+def _new_pingfen_rows(existing, incoming) -> list:
+    """表里已有的评分项，正文不再重复进表。"""
+    seen = {r.item[:12] for r in existing if getattr(r, "item", "")}
+    extra = []
+    for r in incoming:
+        if not r.item:
+            continue
+        if r.item[:12] in seen:
+            continue
+        if any(r.item[:12] in s[:12] or s[:12] in r.item[:12] for s in seen):
+            continue
+        extra.append(r)
+        seen.add(r.item[:12])
+    return extra
+
+
 def node_pingfen(state: CheckState) -> dict:
-    """评分：只搜评标办法。"""
+    """评分：表抽行；无论有没有表，都在评标办法章补表外公式。"""
     print("  [评分] 检索评标办法，并调用模型", flush=True)
     _emit("pingfen", "running", "检索评标办法")
     types = ["score"]
@@ -255,18 +324,62 @@ def node_pingfen(state: CheckState) -> dict:
         }]
         _emit("pingfen", "done", "未切到评标章", rows=rows)
         return {"pingfen": rows}
-    hits = state["index"].search("评标标准 分值 价格分 商务 技术 业绩", types, k=_topk(6))
     extra = "公司情况：\n" + yaml.safe_dump(state["company"], allow_unicode=True)
     extra += "\n抽出评分项、分值、标准；能对照公司材料的写上预估，主观分写「主观分，不预估」。"
-    table = _extract(PingfenTable, "你在抽取评分项。", hits, extra)
-    _follow(state["index"], table.rows, types)
-    rows = [r.model_dump() for r in table.rows]
-    print(f"  [评分] {len(rows)} 条", flush=True)
-    _emit("pingfen", "done", f"{len(rows)} 条", rows=rows)
+    # 评分表普遍是两级的：「标准分」下面分「分项 / 合计」。不分清就会把
+    # 「合计 10 分」当成单项分值——三条各 10 分，加起来 30 分。
+    extra += ("\n表可能有两级表头（例如「标准分」下面分「分项」和「合计」）。"
+              "「分项」是这一项的分值，「合计」是本类几项之和——score 填分项，不要填合计。")
+
+    tables = [t for t in (getattr(state["index"], "tables", None) or [])
+              if t.kind == "pingfen" and t.rows]
+    rows, dropped, degraded = [], [], []
+
+    if tables:
+        _emit("pingfen", "running", f"按表抽取（{len(tables)} 张）")
+        for t in tables:
+            # 整表 HTML 进 prompt：合并关系（rowspan/colspan）和两级表头都在里面，
+            # 比切成若干条款段落再让模型自己拼回去靠谱。
+            hit = {
+                "text": f"【{t.id} 第{t.pages}页】\n{t.to_html()}",
+                "page": t.pages[0] if t.pages else 0,
+                "bbox": t.bbox,
+            }
+            part = _extract(PingfenTable, f"你在抽取评分项。这是评分表 {t.id}，整张表给你。",
+                            [hit], extra)
+            rows += part.rows
+            dropped += part.dropped_rows
+            degraded += part.degraded_rows
+            print(f"  [评分] {t.id} → {len(part.rows)} 条", flush=True)
+    else:
+        # 没有表结构（扫描件或表识别失败）：退回条款检索
+        hits = state["index"].search("评标标准 分值 价格分 商务 技术 业绩", types, k=_topk(6))
+        table = _extract(PingfenTable, "你在抽取评分项。", hits, extra)
+        rows, dropped, degraded = table.rows, table.dropped_rows, table.degraded_rows
+
+    # 表外公式：章内符号扫为主，原 BM25 当双保险（下一轮再删 query）
+    text_hits = _merge_hits(
+        _formula_hits(state["index"], types),
+        state["index"].search("价格分 报价 评标基准价 计算公式 满分", types, k=_topk(3)),
+    )
+    extra_rows = []
+    if text_hits:
+        part = _extract(PingfenTable, "你在抽取写在表外的评分规则（如价格分计算公式）。",
+                        text_hits, extra)
+        extra_rows = _new_pingfen_rows(rows, part.rows)
+        rows += extra_rows
+        dropped += part.dropped_rows
+        degraded += part.degraded_rows
+    print(f"  [评分] 表外补充 {len(extra_rows)} 条", flush=True)
+
+    _follow(state["index"], rows, types)
+    payload = [r.model_dump() for r in rows]
+    print(f"  [评分] {len(payload)} 条", flush=True)
+    _emit("pingfen", "done", f"{len(payload)} 条", rows=payload)
     return {
-        "pingfen": rows,
-        "dropped": {"pingfen": table.dropped_rows},
-        "degraded": {"pingfen": table.degraded_rows},
+        "pingfen": payload,
+        "dropped": {"pingfen": dropped},
+        "degraded": {"pingfen": degraded},
     }
 
 
@@ -405,94 +518,40 @@ def build_graph():
 
 
 def run_check(pdf_path, company_path, on_progress=None) -> dict:
-    """解析、切章、建库、跑四步，返回表数据。"""
+    """解析、切章、建库、跑四步，返回表数据。建库走 parse_stage，与 v2 同一条路。"""
     token = _progress_cb.set(on_progress) if on_progress is not None else None
     try:
-        return _run_check(pdf_path, company_path)
+        return _run_check(pdf_path, company_path, reuse_index=False)
     finally:
         if token is not None:
             _progress_cb.reset(token)
-
-
-def _run_check(pdf_path, company_path) -> dict:
-    """原有核对顺序：解析、切章、建库、四步出表。"""
-    print(f"1/4 解析 {pdf_path}", flush=True)
-    _emit("parse", "running", "按页抽文字和块坐标")
-    pages = parse_pdf(pdf_path)
-    print(f"    {len(pages)} 页", flush=True)
-    _emit("parse", "done", f"{len(pages)} 页", page_count=len(pages))
-    print("2/4 切章", flush=True)
-    _emit("sections", "running", "按标题切章（书签优先）")
-    sections = split_sections(pages, toc=pdf_toc(pdf_path))
-    for sec in sections:
-        label = TYPE_LABEL.get(sec["type"], sec["type"])
-        print(f"    {label}  {sec['title']}  p.{sec['start_page']}-{sec['end_page']}", flush=True)
-    _emit("sections", "done", f"{len(sections)} 章", sections=sections)
-    print("3/4 建索引（向量化，要几分钟）", flush=True)
-    _emit("index", "running", "开始按章建向量")
-
-    def _on_chapter(label, count):
-        _emit("index", "running", f"正在建库 {label} {count} 段")
-
-    index = build_tender_index(pages, sections, pdf_path, on_chapter=_on_chapter)
-    company = load_company(company_path)
-    _emit(
-        "index",
-        "done",
-        "索引建完",
-        index=index,
-        company=company,
-        pdf_path=str(Path(pdf_path).resolve()),
-    )
-    print("4/4 调用模型出表", flush=True)
-    graph = build_graph()
-    out = graph.invoke({
-        "pdf_path": str(pdf_path),
-        "company": company,
-        "index": index,
-    })
-    return {
-        "pdf_path": str(Path(pdf_path).resolve()),
-        "company": company,
-        "sections": sections,
-        "missing": out.get("missing") or [],
-        "feibiao": out.get("feibiao") or [],
-        "pingfen": out.get("pingfen") or [],
-        "cailiao": out.get("cailiao") or [],
-        "kongwei": out.get("kongwei") or [],
-        "shijian": out.get("shijian") or [],
-        "hetong": out.get("hetong") or [],
-        "dropped": out.get("dropped") or {},
-        "degraded": out.get("degraded") or {},
-        "index": index,
-        "pages": pages,
-        "page_count": len(pages),
-    }
 
 
 def run_check_saved(pdf_path, company_path, on_progress=None) -> dict:
-    """载入已有向量库，只跑四步出表。不重新解析、不重新向量化。"""
+    """载入已有向量库，只跑四步出表。建库同样走 parse_stage。"""
     token = _progress_cb.set(on_progress) if on_progress is not None else None
     try:
-        return _run_check_saved(pdf_path, company_path)
+        return _run_check(pdf_path, company_path, reuse_index=True)
     finally:
         if token is not None:
             _progress_cb.reset(token)
 
 
-def _run_check_saved(pdf_path, company_path) -> dict:
-    """用 data/tender_index 里这份 PDF 的库，接上原来的四步。"""
-    print(f"载入已有向量库 {pdf_path}", flush=True)
-    index = load_tender_index(pdf_path)
+def _run_check(pdf_path, company_path, reuse_index: bool = False) -> dict:
+    """v1 出表仍走五节点；解析/切章/抽表/建索引只走 parse_stage。"""
+    from tender.stages.parse_stage import run as parse_run
+
+    print(f"{'载入已有向量库' if reuse_index else '1/4 解析'} {pdf_path}", flush=True)
+    doc, index = parse_run(pdf_path, reuse_index=reuse_index)
     sections = index.sections
-    n_pages = page_count(pdf_path)
-    _emit("parse", "done", f"{n_pages} 页", page_count=n_pages)
-    _emit("sections", "done", f"{len(sections)} 章", sections=sections)
+    for sec in sections:
+        label = TYPE_LABEL.get(sec["type"], sec["type"])
+        print(f"    {label}  {sec['title']}  p.{sec['start_page']}-{sec['end_page']}", flush=True)
     company = load_company(company_path)
     _emit(
         "index",
         "done",
-        "已载入已有向量库",
+        "已载入已有向量库" if reuse_index else "索引建完",
         index=index,
         company=company,
         pdf_path=str(Path(pdf_path).resolve()),
@@ -519,7 +578,7 @@ def _run_check_saved(pdf_path, company_path) -> dict:
         "degraded": out.get("degraded") or {},
         "index": index,
         "pages": [],
-        "page_count": n_pages,
+        "page_count": doc.page_count,
     }
 
 

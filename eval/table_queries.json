@@ -1,0 +1,32 @@
+{
+  "_说明": "表格检索题集：验证 small chunk 能不能召回正确的行（行级），以及 big（整表）里有没有答案。expect_answer 是必须出现在整表/命中 chunk 里的字符串，用它代替「LLM 答对了没有」这个没法自动判的指标。",
+  "_schema": {
+    "id": "唯一标识",
+    "q": "用户问法（自然语言，不是关键词堆砌）",
+    "expect_table": "应该命中的表 id",
+    "expect_row": "应该命中的行号（行级召回）；null 表示只要命中该表任意行即可",
+    "expect_answer": "整表文本里必须出现的字符串（数值或关键短语）"
+  },
+  "queries": [
+    {"id": "q01", "q": "商务部分一共多少分", "expect_table": "beijing_road:p33:2", "expect_row": null, "expect_answer": "本表合计10分"},
+    {"id": "q02", "q": "类似项目业绩每个得几分", "expect_table": "beijing_road:p33:2", "expect_row": 0, "expect_answer": "每个2分"},
+    {"id": "q03", "q": "体系认证拿满分需要几种认证", "expect_table": "beijing_road:p33:2", "expect_row": 2, "expect_answer": "满分3分"},
+    {"id": "q04", "q": "总监理工程师没有业绩得几分", "expect_table": "beijing_road:p33:2", "expect_row": 1, "expect_answer": "没有业绩不得分"},
+    {"id": "q05", "q": "类似项目业绩近三年的时间口径是什么", "expect_table": "beijing_road:p33:2", "expect_row": 0, "expect_answer": "2023年7月1日"},
+    {"id": "q06", "q": "质量控制措施满分多少分", "expect_table": "beijing_road:p33:3", "expect_row": 0, "expect_answer": "质量控制措施(8分)"},
+    {"id": "q07", "q": "进度控制措施多少分", "expect_table": "beijing_road:p33:3", "expect_row": 1, "expect_answer": "进度控制措施(8分)"},
+    {"id": "q08", "q": "安全文明施工管理几分", "expect_table": "beijing_road:p33:3", "expect_row": 5, "expect_answer": "环境保护和安全文明施工管理(7分)"},
+    {"id": "q09", "q": "投标报价分怎么计算", "expect_table": "beijing_road:p33:1", "expect_row": 0, "expect_answer": "评标基准价/投标报价"},
+    {"id": "q10", "q": "投标报价分满分是多少", "expect_table": "beijing_road:p33:1", "expect_row": 0, "expect_answer": "投标报价（30分）"},
+    {"id": "q11", "q": "价格分满分多少", "expect_table": "chongzuo_green:p46:1", "expect_row": 0, "expect_answer": "价格分（20分）"},
+    {"id": "q12", "q": "技术分满分是多少", "expect_table": "chongzuo_green:p46:1", "expect_row": 1, "expect_answer": "技术分（满分60分）"},
+    {"id": "q13", "q": "商务分满分多少", "expect_table": "chongzuo_green:p46:1", "expect_row": 6, "expect_answer": "商务分（满分20分）"},
+    {"id": "q14", "q": "实施方案评分多少分", "expect_table": "chongzuo_green:p46:1", "expect_row": 1, "expect_answer": "实施方案"},
+    {"id": "q15", "q": "项目经理有职称能得几分", "expect_table": "wenling_video:p19:1", "expect_row": 0, "expect_answer": "工程师及以上职称的得2分"},
+    {"id": "q16", "q": "类似项目业绩每个合同得几分", "expect_table": "wenling_video:p19:1", "expect_row": 2, "expect_answer": "每提供一个合同得1分"},
+    {"id": "q17", "q": "服务方案满分多少", "expect_table": "wenling_video:p19:1", "expect_row": 11, "expect_answer": "服务方案"},
+    {"id": "q18", "q": "这张评分表总分多少", "expect_table": "wenling_video:p19:1", "expect_row": null, "expect_answer": "本表合计50分"},
+    {"id": "q19", "q": "16路硬盘录像机技术参数能得几分", "expect_table": "wenling_video:p19:1", "expect_row": 3, "expect_answer": "16路硬盘录像机"},
+    {"id": "q20", "q": "组网方案和机房资源满分", "expect_table": "wenling_video:p19:1", "expect_row": 10, "expect_answer": "组网方案及机房"}
+  ]
+}
