@@ -1,4 +1,4 @@
-"""引擎开关：默认 v1、环境变量可切 v2、写错回退，以及分发到哪条链路。"""
+"""引擎开关：默认 v2、环境变量可切 v1、写错回退，以及分发到哪条链路。"""
 
 import sys
 from pathlib import Path
@@ -11,19 +11,19 @@ import tender.workflow_v2 as wf2  # noqa: E402
 from tender.engine import check, current  # noqa: E402
 
 
-def test_default_is_v1(monkeypatch):
+def test_default_is_v2(monkeypatch):
     monkeypatch.delenv("TENDER_ENGINE", raising=False)
-    assert current() == "v1"
-
-
-def test_env_switches_to_v2(monkeypatch):
-    monkeypatch.setenv("TENDER_ENGINE", "v2")
     assert current() == "v2"
 
 
-def test_unknown_engine_falls_back(monkeypatch):
-    monkeypatch.setenv("TENDER_ENGINE", "v3")
+def test_env_switches_to_v1(monkeypatch):
+    monkeypatch.setenv("TENDER_ENGINE", "v1")
     assert current() == "v1"
+
+
+def test_unknown_engine_falls_back_to_v2(monkeypatch):
+    monkeypatch.setenv("TENDER_ENGINE", "v3")
+    assert current() == "v2"
 
 
 def test_check_dispatches_v2(monkeypatch):

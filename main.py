@@ -47,16 +47,11 @@ def cmd_sections(args):
 
 def cmd_index(args):
     """切块并建索引。终端只打各章段数，分段正文写入文件。"""
-    from tender.index import build_tender_index
-    from tender.parse import parse_pdf
-    from tender.sections import split_sections
+    from tender.stages.parse_stage import run as parse_run
     from tender.step_out import format_index, write_step
 
-    print(f"解析并切章 {args.pdf}", flush=True)
-    pages = parse_pdf(args.pdf)
-    sections = split_sections(pages)
-    print("开始建索引。向量化在 CPU 上，要几分钟。", flush=True)
-    index = build_tender_index(pages, sections, args.pdf)
+    print(f"解析并建索引 {args.pdf}", flush=True)
+    _doc, index = parse_run(args.pdf, reuse_index=False)
     brief, full = format_index(index)
     path = write_step(args.pdf, "03_index.txt", full)
     _show(brief, path)
@@ -72,21 +67,18 @@ def cmd_check(args):
     text = render_tables(result)
     print(text)
     path = write_step(args.pdf, "04_check.txt", text)
-    print(f"\n引擎 {result.get('engine', 'v1')}，全文已写入 {path}")
+    print(f"\n引擎 {result.get('engine', 'v2')}，全文已写入 {path}")
 
 
 def cmd_ask(args):
     """对当前文件提问。"""
     from tender.ask_box import ask_question
-    from tender.index import build_tender_index
-    from tender.parse import parse_pdf
-    from tender.sections import split_sections
+    from tender.stages.parse_stage import run as parse_run
     from tender.tools import set_context
     from tender.workflow import load_company
 
-    pages = parse_pdf(args.pdf)
-    sections = split_sections(pages)
-    index = build_tender_index(pages, sections, args.pdf)
+    # 复用与核对同一套索引（含表结构和条款切分），避免提问框另建一份无表库
+    _doc, index = parse_run(args.pdf, reuse_index=True)
     set_context(index, load_company(args.company))
     out = ask_question(args.question)
     lines = [args.question, ""]
@@ -129,7 +121,7 @@ def main():
     p_check.add_argument("pdf", help="招标文件 PDF")
     p_check.add_argument("company", nargs="?", default=str(DEFAULT_COMPANY), help="company.yaml")
     p_check.add_argument("--engine", choices=["v1", "v2"], default=None,
-                         help="v1=五节点直排（默认），v2=四段流水线；也可用环境变量 TENDER_ENGINE")
+                         help="v2=四段流水线（默认），v1=五节点直排回退；也可用环境变量 TENDER_ENGINE")
     p_check.set_defaults(func=cmd_check)
 
     p_web = sub.add_parser("web", help="打开核对页面")
