@@ -67,7 +67,7 @@ sample/              三份招标 PDF，各配一份同名公司 yaml
 static/              核对页面
   index.html         效果演示页
   vendor/            PDF.js（pdf.min.js、pdf.worker.min.js）
-docs/                方案
+docs/                规则 / 计划 / 归档
 ontology/            本体：21 类 / 12 对象属性 / 21 实例，附自检脚本
 eval/                题集、基线、分段评测
 data/                运行时索引和上传缓存（不进 Git）
