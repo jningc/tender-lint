@@ -1,0 +1,53 @@
+{
+  "_说明": "ask_box（tool-calling agent）的评测集。5 题覆盖四个工具，判据是「答案含期望值」+「trace 里出现了必需工具」。用于证明 agent 不是摆设：它真的调了工具、真的取证。",
+  "_schema": {
+    "id": "唯一标识",
+    "doc": "样本文档",
+    "q": "问题",
+    "expect_any": "答案里必须出现其中至少一个子串（大小写不敏感）",
+    "expect_tools": "trace 里必须出现的工具名（可为空）",
+    "note": "这道题在考什么"
+  },
+  "cases": [
+    {
+      "id": "ask-cap",
+      "doc": "beijing_road",
+      "q": "本项目的最高限价是多少？",
+      "expect_any": ["47.13", "47.130349", "471303"],
+      "expect_tools": ["search_section"],
+      "note": "考检索取证：答案在第一章投标邀请的键值里，模型必须搜而不能编"
+    },
+    {
+      "id": "ask-bond",
+      "doc": "beijing_road",
+      "q": "投标保证金必须在什么时候到账？",
+      "expect_any": ["截止", "到账", "前"],
+      "expect_tools": ["search_section"],
+      "note": "考定位到条款：12.x 在须知章，要能带页码回答"
+    },
+    {
+      "id": "ask-pingfen-biz",
+      "doc": "beijing_road",
+      "q": "商务部分一共多少分？",
+      "expect_any": ["10"],
+      "expect_tools": ["search_section"],
+      "note": "考跨行汇总：合计 10 分不写在任一单项里，要读整表或合并格"
+    },
+    {
+      "id": "ask-qual",
+      "doc": "beijing_road",
+      "q": "我们公司满足总监理工程师的资格要求吗？",
+      "expect_any": ["不满足", "不符", "专业"],
+      "expect_tools": ["search_section", "read_company"],
+      "note": "考双源取证：既要读招标文件的资格条款，又要读 company.yaml 对照"
+    },
+    {
+      "id": "ask-price",
+      "doc": "beijing_road",
+      "q": "评标基准价 90 万、我方报价 100 万，价格分是多少？满分 30 分。",
+      "expect_any": ["27"],
+      "expect_tools": ["calc_price_score"],
+      "note": "考「不口算」：必须调工具算，模型自己乘除算错就是 0 分"
+    }
+  ]
+}
