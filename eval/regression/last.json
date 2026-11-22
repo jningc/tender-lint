@@ -1,8 +1,8 @@
 {
   "engine": "v2",
   "repeats": 3,
-  "at": "20261117-041811",
-  "duration_s": 135.3,
+  "at": "20261122-215925",
+  "duration_s": 141.6,
   "docs": [
     {
       "doc": "beijing_road",
@@ -41,7 +41,7 @@
         "covered_pages_median": 0,
         "star_rows_median": 0
       },
-      "rows_median": 52
+      "rows_median": 60
     },
     {
       "doc": "chongzuo_green",
@@ -74,32 +74,34 @@
       "violated": 0,
       "markers": {
         "markers_total": 30,
-        "covered_pages_median": 1,
-        "star_rows_median": 1
+        "covered_pages_median": 2,
+        "star_rows_median": 2
       },
-      "rows_median": 55
+      "rows_median": 116
     },
     {
       "doc": "wenling_video",
       "runs": 3,
       "questions": {
-        "wl-bond": "hit",
+        "wl-bond": "absent",
         "wl-cap": "hit",
         "wl-neg-perf-bond": "hit",
         "wl-perf-bond": "hit",
         "wl-price": "hit",
-        "wl-validity": "miss"
+        "wl-validity": "hit"
       },
       "flaky": [
-        "wl-bond"
+        "wl-bond",
+        "wl-perf-bond",
+        "wl-validity"
       ],
       "positive": {
         "hit": 4,
         "total": 5
       },
       "positive_stable": {
-        "hit": 3,
-        "total": 4
+        "hit": 2,
+        "total": 2
       },
       "negative": {
         "hit": 1,
@@ -112,25 +114,25 @@
       "violated": 0,
       "markers": {
         "markers_total": 10,
-        "covered_pages_median": 0,
-        "star_rows_median": 0
+        "covered_pages_median": 1,
+        "star_rows_median": 3
       },
-      "rows_median": 68
+      "rows_median": 145
     }
   ],
   "totals": {
     "pos_hit": 14,
     "pos_total": 18,
-    "pos_stable_hit": 13,
-    "pos_stable_total": 17,
+    "pos_stable_hit": 12,
+    "pos_stable_total": 15,
     "neg_hit": 3,
     "neg_total": 3,
     "neg_stable_hit": 3,
     "neg_stable_total": 3,
     "violated": 0,
-    "flaky": 1
+    "flaky": 3
   },
   "markers": {
-    "covered_pages": 1
+    "covered_pages": 3
   }
 }
