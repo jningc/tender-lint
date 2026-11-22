@@ -205,12 +205,21 @@ def node_feibiao(state: CheckState) -> dict:
     """废标：搜邀请/须知/资格/评标办法/采购需求/格式六章，用后果词检索。"""
     print("  [废标] 检索六章（邀请/须知/资格/评标/需求/格式）", flush=True)
     _emit("feibiao", "running", "检索六章废标线索")
-    types = ["invite", "notice", "qualify"]
+    # 废标条款不只出现在邀请/须知/资格三章：评标办法里的「符合性审查不通过即投标
+    # 无效」、采购需求里的「无许可证投标无效」都是废标条件。
+    # **格式章刻意不扩**：那章整章是投标书模板，「中标后按要求提交履约保证金」
+    # 会被当成废标条件，实测让 bj-neg-perf-bond 违规；提示词约束、hits 过滤、
+    # 行级过滤三种补法都压不住（见 docs/计划/任务总顺序.md 四、B 段）。
+    types = ["invite", "notice", "qualify", "score", "demand"]
     miss = [TYPE_LABEL[t] for t in required_types_present(state["index"].sections, types)]
     hits = state["index"].search(
-        "投标无效 废标 资格 保证金 有效期 联合体 最高限价 实质性",
+        # 后果词（否则投标无效 / 否决…）+ 限价类词。限价不能丢：
+        # 「报价超过最高限价的投标无效」这类条款的入口词是「最高限价」，
+        # 只用后果词检索，bj-cap / cz-cap / wl-cap 三题会全掉。
+        "否则投标无效 投标无效 无效投标 废标 否决 实质性 拒收 不予受理 资格 "
+        "最高限价 预算 超过 报价",
         types,
-        k=_topk(5),
+        k=_topk(8),
     )
     extra = "公司情况：\n" + yaml.safe_dump(state["company"], allow_unicode=True)
     extra += "\n抽出会导致投标无效或资格不合格的条件，对照公司情况给结论。"
@@ -353,14 +362,14 @@ def node_pingfen(state: CheckState) -> dict:
             print(f"  [评分] {t.id} → {len(part.rows)} 条", flush=True)
     else:
         # 没有表结构（扫描件或表识别失败）：退回条款检索
-        hits = state["index"].search("评标标准 分值 价格分 商务 技术 业绩", types, k=_topk(6))
+        hits = state["index"].search("评标标准 分值 价格分 商务 技术 业绩", types, k=_topk(8))
         table = _extract(PingfenTable, "你在抽取评分项。", hits, extra)
         rows, dropped, degraded = table.rows, table.dropped_rows, table.degraded_rows
 
     # 表外公式：章内符号扫为主，原 BM25 当双保险（下一轮再删 query）
     text_hits = _merge_hits(
         _formula_hits(state["index"], types),
-        state["index"].search("价格分 报价 评标基准价 计算公式 满分", types, k=_topk(3)),
+        state["index"].search("价格分 报价 评标基准价 计算公式 满分", types, k=_topk(8)),
     )
     extra_rows = []
     if text_hits:
@@ -388,7 +397,7 @@ def node_cailiao(state: CheckState) -> dict:
     print("  [材料] 检索须知、资格、格式，并调用模型", flush=True)
     _emit("cailiao", "running", "检索须知、资格、格式")
     types = ["notice", "qualify", "format"]
-    hits = state["index"].search("应提供 证明 证书 营业执照 保证金 授权委托 声明函", types, k=_topk(6))
+    hits = state["index"].search("应提供 证明 证书 营业执照 保证金 授权委托 声明函", types, k=_topk(8))
     extra = "公司情况：\n" + yaml.safe_dump(state["company"], allow_unicode=True)
     extra += "\n列出必须提交的证明材料，对照公司有没有。代理机构代查的标「无须提供」。"
     table = _extract(CailiaoTable, "你在抽取投标须提交的材料。", hits, extra)
@@ -419,7 +428,7 @@ def node_kongwei(state: CheckState) -> dict:
         }]
         _emit("kongwei", "done", "未切到投标文件格式章", rows=rows)
         return {"kongwei": rows}
-    hits = state["index"].search("投标函 开标一览表 偏离表 声明函 空白 实质性格式", types, k=_topk(6))
+    hits = state["index"].search("投标函 开标一览表 偏离表 声明函 空白 实质性格式", types, k=_topk(8))
     extra = "只列出表格名称和要填的空位，不要替用户填写。"
     table = _extract(KongweiTable, "你在抽取投标文件格式里的空位。", hits, extra)
     _follow(state["index"], table.rows, types)
@@ -440,7 +449,7 @@ def node_shijian(state: CheckState) -> dict:
     hits = state["index"].search(
         "截止时间 开标 获取招标文件 有效期 质疑",
         ["invite", "notice"],
-        k=_topk(4),
+        k=_topk(8),
     )
     shijian = _extract(ShijianTable, "你在抽取时间节点。", hits)
     _follow(state["index"], shijian.rows, ["invite", "notice"])
@@ -461,7 +470,7 @@ def node_hetong(state: CheckState) -> dict:
     hits = state["index"].search(
         "预付款 履约保证金 支付 违约 验收 更换总监",
         ["contract", "format"],
-        k=_topk(4),
+        k=_topk(8),
     )
     hetong = _extract(
         HetongTable,
