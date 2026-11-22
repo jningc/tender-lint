@@ -119,11 +119,19 @@ Verdict = Literal["满足", "不满足", "人工看", "无须提供"]
 
 
 class Ref(_Lenient):
-    """一条出处：页、章、框。"""
+    """一条出处：页、章、框，以及**这一页在这张表里充当什么角色**。
+
+    `role` 目前是**表级**（按所属表推），不是句级：
+    废标的出处一定是「无效句/资格句」，材料是「格式」，时间节点是「期限」……
+    表级判据 100% 覆盖且零成本；句级（金额 / 公式）要正则再判，覆盖率只有 60–70%，
+    先不做。
+    """
     page: Optional[int] = None
     chapter: str = ""
     clause: str = ""
     text: str = ""
+    #: 金额 / 无效句 / 资格句 / 期限 / 公式 / 格式 / 程序句
+    role: str = ""
     bbox: list[float] = Field(default_factory=list)
 
 
@@ -135,6 +143,10 @@ class FeibiaoRow(_Lenient):
     verdict: Verdict = "人工看"
     star: bool = False
     note: str = ""
+    #: 资格门槛 / 无效情形（由 tiers.kind_of 派生，不靠模型）
+    kind: str = ""
+    #: 必废 / 需确认 / 非投标人 / 其他（由 tiers.tier_of 按原文措辞派生）
+    tier: str = ""
     refs: list[Ref] = Field(default_factory=list)
 
 
@@ -147,6 +159,8 @@ class PingfenRow(_Lenient):
     company: str = ""
     estimate: str = ""
     note: str = ""
+    #: 客观 / 主观。主观分（实施方案、服务方案…）由评委会裁量，**不预估**
+    nature: str = ""
     refs: list[Ref] = Field(default_factory=list)
 
 
