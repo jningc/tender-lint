@@ -4,6 +4,7 @@
 """
 
 import json
+import os
 import shutil
 from pathlib import Path
 
@@ -21,6 +22,23 @@ INDEX_VERSION = 9  # 9 = 索引里带表格结构；8 及以下旧缓存必须�
 #: 都不如父标题链——标题只有几十字，语义还正好是「这一条在讲什么」
 MIN_CONTEXT_CHARS = 200
 MAX_CONTEXT_CHARS = 1000
+
+#: RRF 融合常数。score = Σ 1/(RRF_K + rank + 1)，rank 从 0 起。
+#: 60 取自 Azure AI Search 的默认值（其文档称实验最优常数）。
+RRF_K = 60
+
+#: 融合方式：rrf（默认）| union（旧的合并去重，留作 A/B 对比与回退）
+FUSION = (os.environ.get("TENDER_FUSION") or "rrf").strip().lower()
+
+
+def _chunk_key(c: dict) -> tuple:
+    """两路合并用的唯一键：页码 + **全文**。
+
+    不能用 `text[:40]`：`chunk_pages` 切段有重叠，相邻 chunk 前 40 字相同，
+    会被误判成同一个 chunk 折叠掉——实测把 BM25 的 top-8 压成 4–5 条，
+    RRF 因此没有排序空间，退化成恒等变换。
+    """
+    return (c.get("page"), c.get("text") or "")
 
 DEFAULT_INDEX_ROOT = Path(__file__).resolve().parent.parent / "data" / "tender_index"
 DEFAULT_EMBED_MODEL = "BAAI/bge-small-zh-v1.5"
@@ -121,8 +139,8 @@ def chunk_clauses(nodes, pages: list[dict], sections: list[dict]) -> list[dict]:
     和 `chunk_pages` 的差别是两个角色分开：
 
     - **匹配用 `text`**（条款原文，短条款也能靠自身关键词命中）；
-    - **返回用 `context`**（同编号前缀的兄弟条款拼一起），喂给模型时优先用它。
-      只给一条 20 字的 ★ 条款，模型判不出上下文；给 12.1–12.6 整组才行。
+    - **返回用 `context`**（父标题链：章 → 节 → 本条，见下面 `_context`），喂给模型时优先用它。
+      只给一条 20 字的 ★ 条款，模型判不出上下文；补上父标题就够了。
     """
     heights = {p["page"]: p.get("height") or 842.0 for p in pages}
     source = (pages[0].get("source") if pages else "") or "doc.pdf"
@@ -230,6 +248,28 @@ class SectionIndex:
         self.bm25 = BM25Okapi([_tokenize(c["text"]) for c in chunks]) if chunks else None
         return self
 
+    @staticmethod
+    def _doc_to_chunk(doc) -> dict:
+        """向量命中的 Document 还原成与 chunks 同构的 dict。"""
+        bbox = []
+        raw = doc.metadata.get("bbox") or ""
+        if raw:
+            bbox = [float(x) for x in raw.split(",")]
+        return {
+            "text": doc.page_content,
+            "page": doc.metadata.get("page"),
+            "page_height": doc.metadata.get("page_height") or 842.0,
+            "source": doc.metadata.get("source"),
+            "section_type": doc.metadata.get("section_type"),
+            "section_title": doc.metadata.get("section_title"),
+            "bbox": bbox,
+            "blocks": json.loads(doc.metadata.get("blocks") or "[]"),
+            "context": doc.metadata.get("context") or "",
+            "kind": doc.metadata.get("kind") or "",
+            "clause_id": doc.metadata.get("clause_id") or "",
+            "number": doc.metadata.get("number") or "",
+        }
+
     def _hit(self, query: str, chunk: dict) -> dict:
         """把段变成检索命中：bbox 换成段内最匹配的块，块级框才算「能定位」。"""
         precise = pick_block(query, chunk.get("blocks") or [], chunk.get("page_height") or 842.0)
@@ -247,46 +287,78 @@ class SectionIndex:
             "number": chunk.get("number") or "",
         }
 
-    def search(self, query: str, k: int = 4) -> list[dict]:
-        """先 BM25 再向量，合并去重。命中里带块级 bbox。"""
-        if not self.chunks:
-            return []
+    def _search_union(self, query: str, k: int) -> list[dict]:
+        """旧行为：BM25 排前面先取，向量再补，合并去重。
+
+        只用于 A/B 对比（`TENDER_FUSION=union`）：它无法表达「两路都靠前应得加成」。
+        """
         scored = self.bm25.get_scores(_tokenize(query))
         bm25_idx = sorted(range(len(scored)), key=lambda i: scored[i], reverse=True)[:k]
-        vec_hits = self.vs.similarity_search(query, k=k)
-        picked = []
-        seen = set()
+        picked, seen = [], set()
         for i in bm25_idx:
             c = self.chunks[i]
-            key = (c["page"], c["text"][:40])
+            key = _chunk_key(c)
             if key in seen:
                 continue
             seen.add(key)
             picked.append(self._hit(query, c))
-        for doc in vec_hits:
-            key = (doc.metadata.get("page"), doc.page_content[:40])
+        for doc in self.vs.similarity_search(query, k=k):
+            key = _chunk_key({"page": doc.metadata.get("page"), "text": doc.page_content})
             if key in seen:
                 continue
             seen.add(key)
-            bbox = []
-            raw = doc.metadata.get("bbox") or ""
-            if raw:
-                bbox = [float(x) for x in raw.split(",")]
-            picked.append(self._hit(query, {
-                "text": doc.page_content,
-                "page": doc.metadata.get("page"),
-                "page_height": doc.metadata.get("page_height") or 842.0,
-                "source": doc.metadata.get("source"),
-                "section_type": doc.metadata.get("section_type"),
-                "section_title": doc.metadata.get("section_title"),
-                "bbox": bbox,
-                "blocks": json.loads(doc.metadata.get("blocks") or "[]"),
-                "context": doc.metadata.get("context") or "",
-                "kind": doc.metadata.get("kind") or "",
-                "clause_id": doc.metadata.get("clause_id") or "",
-                "number": doc.metadata.get("number") or "",
-            }))
+            hit = self._hit(query, self._doc_to_chunk(doc))
+            hit["score"] = None
+            hit["recall"] = "vec"
+            picked.append(hit)
+        for h in picked[:k]:
+            h.setdefault("recall", "bm25" if h.get("score") is None else h.get("recall"))
         return picked[: k * 2]
+
+    def search(self, query: str, k: int = 4) -> list[dict]:
+        """BM25 与向量两路召回，按 RRF 融合（不是简单合并去重）。
+
+        RRF：score = Σ 1/(RRF_K + rank + 1)，rank 从 0 起。
+        好处是**两条通道都排前面的 chunk 得到加成**，而合并去重只是并集，
+        BM25 排第一、向量排第五和两路都排第一，在旧实现里没有区别。
+
+        RRF_K = 60 取自 Azure AI Search 的默认值（其实验最优常数）。
+        命中里额外带 `score`（融合分）和 `recall`（来自哪路：bm25 / vec / bm25+vec），
+        后者是排查「排序退化到底退在哪一路」用的。
+        """
+        if not self.chunks:
+            return []
+        if FUSION == "union":
+            return self._search_union(query, k)
+
+        fused: dict[tuple, float] = {}
+        payload: dict[tuple, dict] = {}
+        from_where: dict[tuple, set] = {}
+
+        def add(key: tuple, rank: int, src: dict, tag: str) -> None:
+            fused[key] = fused.get(key, 0.0) + 1.0 / (RRF_K + rank + 1)
+            payload.setdefault(key, src)
+            from_where.setdefault(key, set()).add(tag)
+
+        scored = self.bm25.get_scores(_tokenize(query))
+        order = sorted(range(len(scored)), key=lambda i: scored[i], reverse=True)[:k]
+        for rank, i in enumerate(order):
+            c = self.chunks[i]
+            add(_chunk_key(c), rank, {"chunk": c}, "bm25")
+
+        for rank, doc in enumerate(self.vs.similarity_search(query, k=k)):
+            add(_chunk_key({"page": doc.metadata.get("page"), "text": doc.page_content}),
+                rank, {"doc": doc}, "vec")
+
+        out = []
+        for key, score in sorted(fused.items(), key=lambda kv: kv[1], reverse=True)[: k * 2]:
+            src = payload[key]
+            chunk = src.get("chunk") or self._doc_to_chunk(src["doc"])
+            hit = self._hit(query, chunk)
+            hit["score"] = round(score, 4)
+            hit["recall"] = "+".join(sorted(from_where[key]))
+            out.append(hit)
+        return out
 
 
 class TenderIndex:
@@ -301,15 +373,36 @@ class TenderIndex:
         #: 解析阶段的表（`tabular.Table`），评分表那条线从这里取，不参与 BM25/向量
         self.tables = tables or []
 
-    def search(self, query: str, section_types: list[str], k: int = 4) -> list[dict]:
-        """只在指定章类型里搜。"""
+    def search(self, query: str, section_types: list[str], k: int = 4,
+               order: str = "page") -> list[dict]:
+        """只在指定章类型里搜。
+
+        `order`：
+        - `"page"`（默认）：合并后按页码升序。**端到端最优**——`_hit_blob` 把命中拼成
+          一整段连续文本喂模型，按页码排才连贯；按相关度排会让文本跨页跳跃、上下文断裂。
+        - `"relevance"`：按融合分降序。检索指标更好（top8 覆盖 83% vs 72%），
+          但实测端到端正例 15→14、flaky 1→3。**适合 `ask_box` 那种单条证据问答**，
+          那里不需要文本连贯。
+
+        这里曾经是 `hits.sort(key=lambda h: h.get("page") or 0)`——按页码升序。
+        后果是每个 store 内部的排序（包括 RRF 融合）被彻底抹平：
+        不管 BM25/向量/融合怎么算，最终顺序永远是页码，等于「相关性没进模型」，
+        `_hit_blob` 的 8000 字预算也就按页码截断，前面的页优先、与相关度无关。
+        实测后果：18 道题的命中 rank 在 union / rrf 两种模式下 **18/18 完全相同**。
+
+        现在：有融合分（rrf 模式）就按分降序、同分按页码升序（保持稳定）；
+        没有分（union 模式，score 为 None）则退回页码升序，保证旧行为可复现。
+        """
         hits = []
         for typ in section_types:
             store = self.stores.get(typ)
             if store is None:
                 continue
             hits.extend(store.search(query, k=k))
-        hits.sort(key=lambda h: h.get("page") or 0)
+        if order == "relevance" and any(h.get("score") is not None for h in hits):
+            hits.sort(key=lambda h: (-(h.get("score") or 0.0), h.get("page") or 0))
+        else:
+            hits.sort(key=lambda h: h.get("page") or 0)
         return hits
 
 
