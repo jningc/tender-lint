@@ -226,6 +226,10 @@ def node_feibiao(state: CheckState) -> dict:
     extra += "带 ★ 或 ▲ 的条款 star=true，放在列表前面。"
     table = _extract(FeibiaoTable, "你在抽取废标/资格条件。", hits, extra)
     _follow(state["index"], table.rows, types)
+    # 分档与分类是**派生**：从原文措辞算，不让模型判断严重程度
+    from tender.tiers import fill as fill_tiers, stamp_feibiao_roles
+    fill_tiers(table.rows)
+    stamp_feibiao_roles(table.rows)
     already_star = {ref.page for row in table.rows if row.star for ref in row.refs}
     for h in hits:
         if _STAR_RE.search(h.get("text") or "") and h.get("page") not in already_star:
@@ -382,8 +386,12 @@ def node_pingfen(state: CheckState) -> dict:
     print(f"  [评分] 表外补充 {len(extra_rows)} 条", flush=True)
 
     _follow(state["index"], rows, types)
+    # 客观/主观：主观分不预估（评委会裁量，模型给不出可信估值）
+    from tender.tiers import fill_pingfen
+    fill_pingfen(rows)
     payload = [r.model_dump() for r in rows]
-    print(f"  [评分] {len(payload)} 条", flush=True)
+    subj = sum(1 for r in payload if r.get("nature") == "主观")
+    print(f"  [评分] {len(payload)} 条（主观 {subj} 条不预估）", flush=True)
     _emit("pingfen", "done", f"{len(payload)} 条", rows=payload)
     return {
         "pingfen": payload,
@@ -403,6 +411,8 @@ def node_cailiao(state: CheckState) -> dict:
     table = _extract(CailiaoTable, "你在抽取投标须提交的材料。", hits, extra)
     _follow(state["index"], table.rows, types)
     _stamp_pages(table.rows)
+    from tender.tiers import stamp_roles as _stamp_roles
+    _stamp_roles(table.rows, "格式")
     rows = [r.model_dump() for r in table.rows]
     print(f"  [材料] {len(rows)} 条", flush=True)
     _emit("cailiao", "done", f"{len(rows)} 条", rows=rows)
@@ -453,6 +463,8 @@ def node_shijian(state: CheckState) -> dict:
     )
     shijian = _extract(ShijianTable, "你在抽取时间节点。", hits)
     _follow(state["index"], shijian.rows, ["invite", "notice"])
+    from tender.tiers import stamp_roles as _stamp_roles
+    _stamp_roles(shijian.rows, "期限")
     rows = [r.model_dump() for r in shijian.rows]
     print(f"  [时间] {len(rows)} 条", flush=True)
     _emit("shijian", "done", f"{len(rows)} 条", shijian=rows)
@@ -478,6 +490,8 @@ def node_hetong(state: CheckState) -> dict:
         hits,
     )
     _follow(state["index"], hetong.rows, ["contract", "format"])
+    from tender.tiers import stamp_roles as _stamp_roles
+    _stamp_roles(hetong.rows, "条款")
     rows = [r.model_dump() for r in hetong.rows]
     print(f"  [合同] {len(rows)} 条", flush=True)
     _emit("hetong", "done", f"{len(rows)} 条", hetong=rows)
@@ -591,43 +605,127 @@ def _run_check(pdf_path, company_path, reuse_index: bool = False) -> dict:
     }
 
 
+def _pages(row) -> str:
+    """把 refs 的页码拼成 `[p4,17]`；没有就空。"""
+    pages = [r.get("page") for r in (row.get("refs") or []) if r.get("page")]
+    if not pages:
+        return ""
+    uniq = sorted(set(pages))
+    return "  [p" + ",".join(str(x) for x in uniq) + "]"
+
+
+def _cut(s, n: int = 64) -> str:
+    s = str(s or "").replace("\n", " ").strip()
+    return s if len(s) <= n else s[:n] + "…"
+
+
 def render_tables(result: dict) -> str:
-    """核对结果的纯文本，终端和文件用同一份。"""
-    lines = ["章节："]
-    for s in result["sections"]:
-        lines.append(
-            f"  {TYPE_LABEL.get(s['type'], s['type'])}  {s['title']}  p.{s['start_page']}-{s['end_page']}"
-        )
+    """核对结果：先给结论，再按「投标人要办的事」分六块。
+
+    顺序见 `sample/输出形式-落地版.md`：能不能投 → 会不会废 → 交什么 →
+    得多少分 → 什么时候 → 中标后。前附表与事项卡作为附加证据放在最后。
+    """
+    fb = result.get("feibiao") or []
+    cai = result.get("cailiao") or []
+    pf = result.get("pingfen") or []
+    sj = result.get("shijian") or []
+    ht = result.get("hetong") or []
+    kw = result.get("kongwei") or []
+
+    hard = [r for r in fb if (r.get("tier") or "") == "必废"]
+    hard_q = [r for r in hard if (r.get("kind") or "") == "资格门槛"]
+    confirm = [r for r in fb if (r.get("tier") or "") == "需确认"]
+    done = [r for r in fb if (r.get("tier") or "") == "已满足"]
+    minor = [r for r in fb if (r.get("tier") or "") in ("非投标人", "其他")]
+
+    lines = ["【结论】"]
+    lines.append(f"  硬伤 {len(hard)} 项" + (f"（资格门槛 {len(hard_q)} 项）" if hard_q else ""))
+    lines.append(f"  需人工确认 {len(confirm)} 项 · 已满足 {len(done)} 项 · 其他 {len(minor)} 项")
+    deadline = next((r for r in sj if "截止" in str(r.get("name") or "")), None)
+    if deadline:
+        lines.append(f"  投标截止 {_cut(deadline.get('when'), 40)}{_pages(deadline)}")
     if result.get("missing"):
-        lines.append("缺失章节： " + "、".join(result["missing"]))
+        lines.append("  缺失章节：" + "、".join(result["missing"]))
 
-    def _block(title, rows, fields):
-        lines.append(f"\n== {title} {len(rows)} 条 ==")
-        for i, row in enumerate(rows, start=1):
-            bits = [str(row.get(k, "")) for k in fields]
-            refs = row.get("refs") or []
-            pages = ",".join(str(r.get("page")) for r in refs if r.get("page"))
-            tail = f"  [{pages}]" if pages else "  [无页码]"
-            note = str(row.get("note") or "").strip()
-            if note:
-                tail += f"  备注:{note}"
-            lines.append(f"{i}. " + " | ".join(bits) + tail)
+    # ① 能不能投
+    q_rows = [r for r in fb if (r.get("kind") or "") == "资格门槛"]
+    lines.append(f"\n① 能不能投 · 资格门槛 {len(q_rows)} 条")
+    for r in q_rows:
+        tier = r.get("tier") or ""
+        lines.append(f"    [{tier}] {r.get('verdict')} | {_cut(r.get('condition'), 58)}{_pages(r)}")
+    if not q_rows:
+        lines.append("    （未抽取到资格门槛条目）")
 
-    _block("废标对照", result["feibiao"], ["verdict", "condition"])
-    _block("评分对照", result["pingfen"], ["item", "score", "estimate"])
-    _block("材料对照", result["cailiao"], ["verdict", "material"])
-    _block("空位对照", result["kongwei"], ["form", "field"])
-    _block("时间节点", result["shijian"], ["name", "when"])
-    _block("合同要点", result["hetong"], ["item", "content"])
+    # ② 会不会废
+    bad = [r for r in fb if (r.get("kind") or "") != "资格门槛"]
+    order = {"必废": 0, "需确认": 1, "非投标人": 2, "已满足": 3, "其他": 4}
+    bad.sort(key=lambda r: order.get(r.get("tier") or "", 9))
+    lines.append(f"\n② 会不会废 · 无效情形 {len(bad)} 条（按确定性排序）")
+    for r in bad:
+        cond = str(r.get("condition") or "")
+        # 条件原文已经带 ★/▲ 时不再补前缀，避免「★ ▲xxx」
+        star = " ★" if r.get("star") and not cond.strip().startswith(("★", "▲")) else ""
+        lines.append(f"    [{r.get('tier') or '?'}]{star} {_cut(r.get('condition'), 58)}{_pages(r)}")
+    if not bad:
+        lines.append("    （未抽取到无效情形）")
 
+    # ③ 交什么（空位并入「需填表」一行）
+    lines.append(f"\n③ 交什么 · 材料 {len(cai)} 条")
+    for r in cai:
+        lines.append(f"    [{r.get('verdict')}] {_cut(r.get('material'), 52)}{_pages(r)}")
+    if kw:
+        forms = [_cut(r.get("form"), 18) for r in kw if r.get("form")]
+        if forms:
+            lines.append(f"    [需填表] {'、'.join(forms)}（格式章空表，点进去看模板）")
+
+    # ④ 得多少分
+    total = sum(i for i in (_num(r.get("score")) for r in pf) if i)
+    labels = "、".join(sorted({str(r.get("category") or "").strip() for r in pf if str(r.get("category") or "").strip()}))
+    tail = f"（本表可见分项合计 {total:g} 分" + (f"；分类：{labels}" if labels else "") + "）" if total else ""
+    lines.append(f"\n④ 得多少分 · 评分 {len(pf)} 条{tail}")
+    for r in pf:
+        est = r.get("estimate")
+        tail = f"  ← 估 {est}" if est else ""
+        lines.append(f"    {_cut(r.get('item'), 34):<34} {str(r.get('score') or ''):>6}"
+                     f"  {_cut(r.get('standard'), 40)}{_pages(r)}{tail}")
+
+    # ⑤ 什么时候
+    lines.append(f"\n⑤ 什么时候 · 时间节点 {len(sj)} 条")
+    for r in sj:
+        lines.append(f"    {_cut(r.get('when'), 40):<40} {_cut(r.get('name'), 24)}{_pages(r)}")
+
+    # ⑥ 中标后
+    lines.append(f"\n⑥ 中标后 · 合同要点 {len(ht)} 条")
+    for r in ht:
+        lines.append(f"    {_cut(r.get('item'), 20):<20} {_cut(r.get('content'), 56)}{_pages(r)}")
+
+    # 附加：前附表 + 事项卡
+    try:
+        from tender import report_extras
+        lines.extend(report_extras.render(report_extras.collect(result.get("index"))))
+    except Exception as exc:                      # 附加信息失败不影响主输出
+        lines.append(f"\n[附加信息] 生成失败：{exc}")
+
+    # 附录：章节与丢弃统计
+    lines.append("\n【附录】章节")
+    for s in result.get("sections") or []:
+        label = TYPE_LABEL.get(s["type"], s["type"])
+        lines.append(f"  {label}  {s['title']}  p.{s['start_page']}-{s['end_page']}")
     dropped = result.get("dropped") or {}
     degraded = result.get("degraded") or {}
     for key in dropped:
         n_drop = len(dropped.get(key) or [])
         n_deg = len(degraded.get(key) or [])
         if n_drop or n_deg:
-            lines.append(f"\n[{key}] 丢弃空行 {n_drop} 条，缺字段降级 {n_deg} 条（明细见 tables.json）")
+            lines.append(f"  [{key}] 丢弃空行 {n_drop} 条，缺字段降级 {n_deg} 条（明细见 tables.json）")
     return "\n".join(lines)
+
+
+def _num(s):
+    """把 "30" / "30 分" / "4分" 取成数字，取不到返回 0。"""
+    import re as _re
+    m = _re.search(r"\d+(?:\.\d+)?", str(s or ""))
+    return float(m.group(0)) if m else 0.0
 
 
 def print_tables(result: dict) -> None:
