@@ -317,7 +317,15 @@ class SectionIndex:
             c = self.chunks[i]
             add(_chunk_key(c), rank, {"chunk": c}, "bm25")
 
-        for rank, doc in enumerate(self.vs.similarity_search(query, k=k)):
+        # 向量路可以用术语表的同义词扩展（BM25 保持原文）。
+        # 这是唯一还能让 RRF 起作用的做法：让两路召回**不同的**东西。
+        # expand_query 全部塞进 BM25 试过，14/18→12/18（稀释字面信号）；
+        # 只扩向量那一路不会动 BM25 的字面命中。
+        vq = query
+        if os.getenv("TENDER_VEC_EXPAND") == "1":
+            from tender.terms import expand_query
+            vq = expand_query(query) or query
+        for rank, doc in enumerate(self.vs.similarity_search(vq, k=k)):
             add(_chunk_key({"page": doc.metadata.get("page"), "text": doc.page_content}),
                 rank, {"doc": doc}, "vec")
 

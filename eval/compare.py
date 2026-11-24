@@ -46,9 +46,15 @@ def load_rows(path: Path):
             title = TABLE_TITLES.get(key, key)
             for r in items or []:
                 pages = sorted({x.get("page") for x in (r.get("refs") or []) if x.get("page")})
+                #: 负例判据只用主体描述，不看 refs——refs 长度受 `_follow` 追引用影响，
+                #: 和「这行讲的对不对」无关。实测：一行正确的「资格审查不合格…作无效标处理」
+                #: 因为它的第 17 条 ref 是 p34「履约保证金：本项目不收取」就被判违规。
+                _skip = {"refs", "star", "tier", "kind", "role", "nature", "verdict"}
                 rows.append({
                     "table": title,
                     "text": json.dumps(r, ensure_ascii=False),
+                    "subject": " ".join(str(v) for k, v in r.items()
+                                        if k not in _skip and isinstance(v, (str, int, float))),
                     "pages": pages,
                     "no_page": not pages,
                     "verdict": r.get("verdict"),
@@ -113,8 +119,17 @@ def marker_report(rows, doc):
 
 
 def _candidates(rows, q):
-    """落对表、且含关键词的候选条目。"""
-    return [r for r in rows if r["table"] in q["tables"] and q["keyword"] in r["text"]]
+    """落对表、且含关键词的候选条目。
+
+    负例只看 `subject`（条件 + 备注等主体字段），不看 `text`（整行 JSON 含 refs）：
+    一行完全正确的废标条款，只要有一条 ref 碰到关键词就会被判违规，
+    而 refs 是 `_follow` 追出来的，长度和这行对不对无关。
+
+    正例仍用 `text`——关键词可能只出现在引用原文里，收窄会误伤。
+    """
+    field = "subject" if q.get("kind") == "negative" else "text"
+    return [r for r in rows
+            if r["table"] in q["tables"] and q["keyword"] in (r.get(field) or "")]
 
 
 def _passes(r, q):
