@@ -7,8 +7,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from tender.clauses import (  # noqa: E402
-    build_clauses, detect_numbering, heading_depth, is_start, link_parents,
-    pick_start_bands, prefix_of, stats,
+    build_clauses, detect_numbering, heading_family,
+    pick_start_bands, stats,
 )
 
 BODY = 12.0
@@ -52,35 +52,35 @@ def test_pick_start_bands_falls_back_to_font():
 
 def test_amount_is_not_a_clause_number():
     """2263.76 是金额，不是 2263.76 条。"""
-    assert is_start(_block("2263.76 元"), ["X.Y"], BODY) is None
-    assert is_start(_block("12.1 投标保证金金额"), ["X.Y"], BODY) == ("X.Y", "12.1")
+    assert heading_family(_block("2263.76 元"), ["X.Y"], BODY) is None
+    assert heading_family(_block("12.1 投标保证金金额"), ["X.Y"], BODY) == ("decimal1", "12.1")
 
 
 def test_decimal_is_not_a_section_number():
     """"1.5 倍" 不是第 1.5 条。"""
-    assert is_start(_block("1.5 倍价格"), ["1."], BODY) is None
-    assert is_start(_block("1.项目编号：ZRDX"), ["1."], BODY) == ("1.", "1.")
+    assert heading_family(_block("1.5 倍价格"), ["1."], BODY) is None
+    assert heading_family(_block("1.项目编号：ZRDX"), ["1."], BODY) == ("digit", "1.")
 
 
 def test_clause_number_beats_dotted():
-    hit = is_start(_block("第一条 为规范政府采购行为"), ["第X条", "X.Y"], BODY)
-    assert hit == ("第X条", "第一条")
+    hit = heading_family(_block("第一条 为规范政府采购行为"), ["第X条", "X.Y"], BODY)
+    assert hit == ("article", "第一条")
 
 
 def test_band_must_be_selected():
     """没被探进起点档的编号不算起点。"""
-    assert is_start(_block("12.1 投标保证金"), ["1."], BODY) is None
+    assert heading_family(_block("12.1 投标保证金"), ["1."], BODY) is None
 
 
 # ---------- （1） 按章节区分 ----------
 
 def test_item_number_independent_in_score_section():
-    hit = is_start(_block("（1）价格分 30 分"), ["（1）"], BODY, section_type="score")
-    assert hit == ("（1）", "（1）")
+    hit = heading_family(_block("（1）价格分 30 分"), ["（1）"], BODY, section_type="score")
+    assert hit == ("digit_paren", "（1）")
 
 
 def test_item_number_is_child_elsewhere():
-    assert is_start(_block("（1）投标文件提交方式"), ["（1）"], BODY, section_type="notice") is None
+    assert heading_family(_block("（1）投标文件提交方式"), ["（1）"], BODY, section_type="notice") is None
 
 
 # ---------- 聚合 ----------
@@ -141,23 +141,17 @@ def test_high_band_stops_low_band_clause():
     assert "不得泄露" in nodes[-1].text
 
 
-def test_long_clause_demoted_to_block():
-    """一条条款吃超过 60 块就是切分失控：断开，别让它一路吞下去。"""
+def test_long_clause_is_cut_not_demoted():
+    """一条条款吃超过 60 块：断开并标 truncated，节点不降级消失。"""
     blocks = [_block("12.1 甲", y=60)]
     blocks += [_block(f"续行{i}", y=80 + i * 10) for i in range(70)]
     nodes = build_clauses([_page(1, blocks)], SECTIONS)
     assert all(n.blocks <= 60 for n in nodes)
     assert len(nodes) >= 2
+    assert any(n.truncated for n in nodes)
 
 
 # ---------- 父子关系（检索用条款，返回用父级） ----------
-
-def test_prefix_of():
-    assert prefix_of("5.1.1") == "5.1"
-    assert prefix_of("12.1") == "12"
-    assert prefix_of("1.") == ""
-    assert prefix_of("") == ""
-
 
 def test_parent_by_number_prefix():
     """5.1.1 / 5.1.2 的父是 5.1，不是「上一条」。"""
@@ -176,13 +170,13 @@ def test_parent_falls_back_to_previous():
     assert nodes[1].parent_id is None
 
 
-def test_heading_depth_from_numbering():
-    """深度直接由编号形式给出，跟「是不是条款」无关。"""
-    assert heading_depth(_block("第二章 投标人须知"), ["X.Y"], BODY) == 0
-    assert heading_depth(_block("12 投标保证金"), ["X.Y"], BODY) == 1
-    assert heading_depth(_block("12.1 保证金金额"), ["X.Y"], BODY) == 2
-    assert heading_depth(_block("11.2.1 明细费用"), ["X.Y"], BODY) == 3
-    assert heading_depth(_block("普通正文没有编号"), ["X.Y"], BODY) is None
+def test_heading_family_from_numbering():
+    """族由编号形式给出；深度留给栈，这里只认「是不是标题 / 哪一族」。"""
+    assert heading_family(_block("第二章 投标人须知"), ["X.Y"], BODY) == ("chapter", "")
+    assert heading_family(_block("12 投标保证金"), ["X.Y"], BODY) == ("bare", "12")
+    assert heading_family(_block("12.1 保证金金额"), ["X.Y"], BODY) == ("decimal1", "12.1")
+    assert heading_family(_block("11.2.1 明细费用"), ["X.Y"], BODY) == ("decimal2", "11.2.1")
+    assert heading_family(_block("普通正文没有编号"), ["X.Y"], BODY) is None
 
 
 def test_bare_number_heading_is_parent():
@@ -191,8 +185,7 @@ def test_bare_number_heading_is_parent():
     nodes = build_clauses([_page(1, blocks)], SECTIONS)
     by_text = {n.text: n for n in nodes}
     head = by_text["12 投标保证金"]
-    # depth 现在由栈推导：这份测试文档没有章，所以第一个标题就是顶层（0）。
-    # 旧值是写死的 1（DEPTH_FIXED 那套），不代表它的真实层级。
+    # depth 由栈推导：无章时第一个标题是顶层（0），不是旧 DEPTH_FIXED 的 1
     assert head.depth == 0
     assert by_text["12.1 甲"].parent_id == head.id
     assert by_text["12.2 乙"].parent_id == head.id

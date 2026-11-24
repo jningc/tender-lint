@@ -14,6 +14,8 @@ from __future__ import annotations
    「（最低评标价法）」都编成第五章，按类型去重会把第二套吞掉。
 
 三份样本的章名不一样，靠别名表对齐，不写死某一份的目录。
+
+切章策略：**默认正文「第X章」**；关键 type 缺失或章数明显偏少时，才用书签补洞。
 """
 
 import re
@@ -82,12 +84,12 @@ def _locate_toc_page(pages: list[dict], title: str, nominal: int, span: int = 3)
 
 
 def _sections_from_toc(pages: list[dict], toc: list[dict]) -> list[dict]:
-    """用 PDF 书签切章。书签里形如「第X章」的条目就是章。
+    """从 PDF 书签切章（供正文不足时补洞）。形如「第X章」的条目才算章。
 
-    书签比正文正则可靠：不受页面排版位置影响，也不怕章标题排在页中间。
-    但书签有两个毛病，都要处理：
+    书签不受排版位置影响，但有两个毛病要处理：
       - 页码可能是印刷页（不是 PDF 物理页）→ `_locate_toc_page` 校准；
       - 可能把 Word 里的随机层级导进来（`（一）适用范围` 也标成 L1）→ 只认「第X章」。
+    默认路径仍是正文；见 `split_sections`。
     """
     entries = []
     seen = set()
@@ -177,7 +179,7 @@ def _heading_candidates(pages: list[dict]) -> list[dict]:
 
 
 def _sections_from_text(pages: list[dict]) -> list[dict]:
-    """正文正则切章（书签缺失/不全时的兜底）。"""
+    """正文正则切章（默认路径）。"""
     heads = _heading_candidates(pages)
     cleaned = []
     for h in heads:

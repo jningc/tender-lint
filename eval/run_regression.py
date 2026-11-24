@@ -193,9 +193,17 @@ def gate(current: dict, baseline: dict | None) -> list[str]:
     _drop(pos, "正例")
     _drop(neg, "负例")
 
-    if current["markers"]["covered_pages"] < baseline["markers"]["covered_pages"]:
-        reasons.append(f"★ 覆盖页 {current['markers']['covered_pages']} < 上次 "
-                       f"{baseline['markers']['covered_pages']}")
+    # ★ 覆盖只有「跑的是同一批文档」时才能比：`--docs wenling_video` 这类排查跑
+    # 拿单份的 1 页去比全量的 3 页，会凭空报退化（实测过一次）。
+    def _doc_names(run: dict) -> frozenset:
+        return frozenset(d["doc"] for d in (run.get("docs") or []) if isinstance(d, dict))
+
+    cur_docs = _doc_names(current)
+    base_docs = _doc_names(baseline)
+    if cur_docs and base_docs and cur_docs == base_docs:
+        if current["markers"]["covered_pages"] < baseline["markers"]["covered_pages"]:
+            reasons.append(f"★ 覆盖页 {current['markers']['covered_pages']} < 上次 "
+                           f"{baseline['markers']['covered_pages']}")
     if current["totals"].get("violated", 0) > baseline["totals"].get("violated", 0):
         reasons.append(f"负例违规 {current['totals']['violated']} > 上次 "
                        f"{baseline['totals'].get('violated', 0)}（串表变多了）")

@@ -305,7 +305,7 @@ async def job_parsed_text(request: Request):
 
 
 async def page_png(request: Request):
-    """按页渲 PNG。有 bbox 时在原件上画黄框。"""
+    """按页渲 PNG。查询参数可带 bbox（服务端可画框）；当前前端只跳页不画框。"""
     job_id = request.path_params["job_id"]
     page_num = int(request.path_params["page"])
     with _lock:

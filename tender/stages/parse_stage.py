@@ -4,9 +4,9 @@
 表格（`tabular.Table`）跟着索引一起落盘，评分表那条线直接读它，
 不参与 BM25/向量。
 
-切分单位由环境变量 `TENDER_CHUNK_UNIT` 决定：`paragraph`（默认，380 字拼段）
-或 `clause`（条款树，见 `docs/规则/条款口径.md`）。两种索引互不复用——manifest 里
-记了 `chunk_unit`，对不上就重建。
+切分单位由环境变量 `TENDER_CHUNK_UNIT` 决定：默认 `clause`（条款树），
+可改 `paragraph`（380 字拼段）。两种索引互不复用——manifest 里记了
+`chunk_unit`，对不上就重建。
 
 按页正文（`page_texts`）在**索引建完（或复用就绪）后**才交给前端 / 写入
 `page_texts.json`；网页解析栏只读这份，不再现场抽 PDF。
@@ -34,7 +34,7 @@ from tender.tabular import extract_tables
 from tender.workflow import _emit
 
 #: 切分单位：paragraph | clause
-#: clause = 条款树 + 书签建父子 + 父标题链 context（见 docs/规则/切分策略.md）
+#: clause = 条款树（编号族+栈，书签辅助）+ 父标题链 context
 DEFAULT_CHUNK_UNIT = "clause"
 
 
@@ -89,8 +89,7 @@ def run(pdf_path, reuse_index: bool = True) -> tuple[ParsedDoc, TenderIndex, lis
         pages = parse_pdf(pdf_path)
         page_texts = pages_as_texts(pages)
         _emit("parse", "done", f"{len(pages)} 页", page_count=len(pages))
-        _emit("sections", "running", "按标题切章")
-        _emit("sections", "running", "按标题切章（书签优先）")
+        _emit("sections", "running", "按标题切章（正文优先）")
         sections = split_sections(pages, toc=pdf_toc(pdf_path))
         _emit("sections", "done", f"{len(sections)} 章", sections=sections)
 

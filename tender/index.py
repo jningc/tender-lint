@@ -12,7 +12,6 @@ from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 from rank_bm25 import BM25Okapi
 
-from tender.clauses import prefix_of
 from tender.sections import TYPE_LABEL, section_of_page, types_of
 
 INDEX_VERSION = 12  # 12 = 并入评分表行 chunk；11 及以下必须重建
@@ -70,7 +69,7 @@ def _tokenize(text: str) -> list[str]:
 
 
 def chunk_pages(pages: list[dict], sections: list[dict], target_len: int = 380) -> list[dict]:
-    """章内按块拼段，不跨页；保留每个块的 bbox，供检索时挑最准的那一块。"""
+    """章内按块拼段，不跨页；chunk.bbox 为段内块并集（不再按块精修）。"""
     chunks = []
     buf = []
     buf_len = 0

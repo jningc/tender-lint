@@ -7,8 +7,8 @@ from __future__ import annotations
   page / width / height / text / blocks[{text, bbox}]
 bbox 为 PDF 点坐标 [x0, y0, x1, y1]，原点在左上。
 
-块上另记版面线索——**只加字段，不改切分与检索行为**：
-  max_size      块内最大字号（条款层级判定要用，原先被丢掉）
+块上另记版面线索（供条款树 / 页眉判定等使用）：
+  max_size      块内最大字号（裸数字标题、字号档会用到）
   bold_ratio    加粗 span 占比
   spans_count   span 数
   is_header / is_footer  跨页重复的页眉页脚块
@@ -188,7 +188,7 @@ def parse_pdf(pdf_path) -> list[dict]:
 
 
 def render_page_png(pdf_path, page_num: int, bboxes: list | None = None, scale: float = 1.6) -> bytes:
-    """把一页渲成 PNG。bboxes 有值时在原件上画黄框。"""
+    """把一页渲成 PNG。bbox 有值时服务端可画框；前端当前不传、只跳页。"""
     path = Path(pdf_path)
     doc = fitz.open(path)
     if page_num < 1 or page_num > doc.page_count:

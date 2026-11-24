@@ -224,6 +224,11 @@ def node_feibiao(state: CheckState) -> dict:
         types,
         k=_topk(8),
     )
+    # 备注（2026-11-24）：这里曾经按 `kind != "frontmatter"` 排除前附表条目，
+    # 已取消。按来源类型过滤会误伤真废标条件（崇左前附表 13.1「必须提供，
+    # 否则按无效投标处理」四条），而且挡不住「不收取投标保证金」被落成废标行
+    # 这种真问题——那是「取值 vs 条件」的语义问题，该在校验层按后果词判，
+    # 不该在检索层按来源判。
     extra = "公司情况：\n" + yaml.safe_dump(state["company"], allow_unicode=True)
     extra += "\n抽出会导致投标无效或资格不合格的条件，对照公司情况给结论。"
     extra += "带 ★ 或 ▲ 的条款 star=true，放在列表前面。"

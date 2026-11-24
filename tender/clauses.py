@@ -1,15 +1,15 @@
-"""条款树：把「块 ≈ 行」的解析产物聚成条款，给 bbox 一个语义边界。
+"""条款树：把 parse 的文本块聚成标题/条款节点（检索 chunk 的边界）。
 
-口径见 `docs/规则/条款口径.md`（三条已裁决）：
+不调模型、不建索引。主逻辑：
 
-- **起点档先探测再套优先级**：三份样本用了三套编号（`X.Y.Z` 主力 / `1.` 主力 /
-  几乎不用 `X.Y`），写死一档必错。取命中率最高的两档当起点档，一档不到 2% 就
-  退回字号规则。
-- **跨页条款 bbox 取整条并集**，`page_start/page_end` 分开记，`continued=true`。
-- **`（1）` 只在评标办法章算独立条款**，其他章是子项，归上一款。
-- 没有起点的块 `kind=block`，照旧保留——宁可粗，不可丢。
+- **起点档先探测**：按文档统计编号命中，够密或够多的档都算起点（否则退回字号）；
+  写死单一档位会在三份样本上翻车。
+- **层级 = 编号族 + 栈**：同族同级、新族作栈顶子级；书签可辅助，块自带编号时以族为准。
+- **表/前附表 bbox 内的块跳过**（由调用方传入 `table_boxes`），避免稀疏条款号进树。
+- **跨页**：`page_start/page_end` + bbox 并集，`continued=true`；过长只标 `truncated`，不删节点。
+- **`（1）` 仅在评标办法章**可作起点；无起点的块 `kind=block`，宁可粗不可丢。
 
-这一层不调模型、不建索引，纯几何 + 编号。
+口径细节见 `docs/规则/条款口径.md`（其中「只取两档」已过时，以本模块为准）。
 """
 
 from __future__ import annotations
@@ -56,7 +56,7 @@ _RE = {
 TITLE_MAX_LEN = 40
 TITLE_SIZE_SLACK = 1.1
 
-#: 一条条款最多跨几页、吃几个块。超了就降级成 block 并断开。
+#: 一条条款最多跨几页、吃几个块。超了就断开并标 truncated（节点仍留在目录里）。
 #: 实测必要性：没有上限时，北京「3.项目联系方式」一路吞到第二章，442 块 11715 字。
 MAX_CLAUSE_PAGES = 2
 MAX_CLAUSE_BLOCKS = 60
@@ -116,13 +116,9 @@ def _toc_depth(entry: dict) -> int | None:
 # 尾部放宽到 30 字：`2 资金来源、项目属性、科研仪器设备采购、核心产品` 有 24 字，
 # 卡在 20 会让它掉到书签分支，书签的 L 级又把它排错一层（实测北京 2/3/4 缩进错位）。
 _BARE = re.compile(r"^(\d{1,2})\s*[\u4e00-\u9fa5]{2,}[^\n]{0,30}$")
-#: 固定深度的档位（X.Y 系按点号数动态算）。
-#: **只给 `heading_depth()` 用**（纯函数、不知道上下文）；建树走下面的族+栈。
-DEPTH_FIXED = {"1.": 1, "一、": 1, "（一）": 4, "（1）": 5, "①": 6}
 
-#: 编号族——决定「谁和谁同级」。固定深度（`1.` 与 `一、` 都是 1）会把
-#: `1.项目编号` 判成 `一、项目基本情况` 的兄弟；`（一）` 给 4 会让它跳级。
-#: 族 ≠ 深度：深度由 `_pop_to_family()` 按「它出现在谁后面」推导。
+#: 编号族——决定「谁和谁同级」。写死深度（旧 DEPTH_FIXED）会把 `1.` 与 `一、`
+#: 判成同级、把 `（一）` 跳到 d4。族 ≠ 深度：深度由 `_pop_to_family()` 推导。
 FAMILY_OF_BAND = {
     "第X条": "article",
     "一、": "cn",            # 一、二、三、（含「一   说明」空格写法）
@@ -174,38 +170,6 @@ def match_toc(toc: list[dict], pages: list[dict]) -> dict[tuple[int, int], tuple
             if claimed:
                 break
     return hits
-
-
-def heading_depth(block: dict, bands: list[str], body: float | None,
-                  section_type: str | None = None) -> int | None:
-    """块的层级深度；`None` 表示正文而不是标题。
-
-    深度直接来自编号形式——标题从大到小本身就是父子关系，跟「它是不是一条
-    条款」无关。裸数字标题（`12 投标保证金`）是深度 1，常常是 `12.1` 的父，
-    早先版本把它当正文吞掉，父链就断了。
-    """
-    line = (block.get("text") or "").replace("\n", " ").strip()
-    if not line:
-        return None
-    # 章标题：不能是「第五章《采购需求》），否则…」这种句首引用
-    if _CHAP.match(line) and len(line) <= 30:
-        return 0
-    for band in BAND_ORDER:
-        if band == "字号" or band not in bands:
-            continue
-        if band == "（1）" and section_type != "score":
-            continue
-        m = _RE[band].match(line)
-        if not m:
-            continue
-        number = m.group(0).strip()
-        if band == "X.Y":
-            return 1 + number.count(".")          # 12.1 → 2，11.2.1 → 3
-        return DEPTH_FIXED.get(band, 1)
-    # 裸数字标题：短、独立成行、字号不小于正文
-    if _BARE.match(line) and len(line) <= 20 and (not body or (block.get("max_size") or 0) >= body * 0.99):
-        return 1
-    return None
 
 
 def heading_family(block: dict, bands: list[str], body: float | None,
@@ -321,29 +285,6 @@ def pick_start_bands(counts: dict[str, int], total_blocks: int,
     return ["字号"]
 
 
-def is_start(block: dict, bands: list[str], body: float | None,
-             section_type: str | None = None) -> tuple[str, str] | None:
-    """这个块是不是条款起点。返回 (档位, 编号原文)。"""
-    line = _first_line(block)
-    if not line:
-        return None
-    for band in BAND_ORDER:
-        if band not in bands or band == "字号":
-            continue
-        # （1）在评标办法里是独立评分项，在其他章是子项
-        if band == "（1）" and section_type != "score":
-            continue
-        m = _RE[band].match(line)
-        if m:
-            # group(0) 就是编号本身（后瞻不消耗字符）
-            return band, m.group(0).strip()
-    if "字号" in bands and body and block.get("max_size", 0) >= body * TITLE_SIZE_SLACK:
-        text = block.get("text") or ""
-        if "\n" not in text and len(line) <= TITLE_MAX_LEN:
-            return "字号", ""
-    return None
-
-
 def _inside_any(box: list[float], boxes: list[list[float]]) -> bool:
     cx = (box[0] + box[2]) / 2
     cy = (box[1] + box[3]) / 2
@@ -380,48 +321,6 @@ def _cut(node: "ClauseNode") -> None:
     node.truncated = True
 
 
-#: 多级编号，如 5.1.1
-_DOTTED = re.compile(r"^\d+(?:\.\d+){1,3}$")
-
-
-def prefix_of(number: str) -> str:
-    """编号前缀：`5.1.1` → `5.1`，`12.1` → `12`，非多级编号返回空。"""
-    number = (number or "").strip()
-    if not _DOTTED.match(number):
-        return ""
-    return ".".join(number.split(".")[:-1])
-
-
-def link_parents(nodes: list["ClauseNode"]) -> None:
-    """填 `parent_id`：先按编号前缀找祖先，找不到退到上一条条款。
-
-    不按「档位等级」硬编码——同一份文件里 `第X条` 和 `12.1` 的层级关系
-    因文件而异，前缀匹配 + 顺序兜底比维护一张等级表稳。
-    """
-    by_number = {}
-    for node in nodes:
-        if node.is_clause and _DOTTED.match((node.number or "").strip()):
-            # 按「章 + 编号」索引：不同章都有 3.1/3.2，不加章会跨章连错父
-            by_number.setdefault((node.section, node.number.strip()), node)
-
-    prev = None
-    for node in nodes:
-        if not node.is_clause:
-            continue
-        parent = None
-        parts = (node.number or "").strip().split(".")
-        if len(parts) > 1 and _DOTTED.match(node.number.strip()):
-            for cut in range(len(parts) - 1, 0, -1):
-                cand = by_number.get((node.section, ".".join(parts[:cut])))
-                if cand is not None and cand is not node:
-                    parent = cand
-                    break
-        if parent is None and prev is not None and prev.section == node.section:
-            parent = prev
-        node.parent_id = parent.id if parent is not None else None
-        prev = node
-
-
 def _stem_of(pages: list[dict]) -> str:
     source = (pages[0].get("source") if pages else "") or "doc"
     return Path(source).stem
@@ -432,8 +331,8 @@ def build_clauses(pages: list[dict], sections: list[dict],
                   stem: str | None = None, toc: list[dict] | None = None) -> list[ClauseNode]:
     """按口径把块聚成条款。
 
-    `toc`（`parse.pdf_toc` 的产物）提供现成骨架：书签层级就是父子关系，优先于
-    正文里的编号推断。`table_boxes` 里的块不参与聚合（表格单独走）。
+    层级以编号族+栈为准；书签可辅助贴标题，但块自带编号时仍走族。
+    `table_boxes` 内的块跳过（评分表/前附表等，表格单独走）。
     """
     if not pages:
         return []
