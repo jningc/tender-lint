@@ -88,7 +88,7 @@
 
   main {
     display: grid;
-    grid-template-columns: minmax(280px, 1.2fr) 12px minmax(280px, 0.95fr);
+    grid-template-columns: minmax(260px, 1fr) 12px minmax(420px, 1.35fr);
     gap: 0;
     padding: 12px 20px 20px;
     align-items: start;
@@ -96,8 +96,28 @@
   .doc-panel {
     position: sticky;
     top: 12px;
-    container-type: inline-size;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
   }
+  /* 方案 E：原件 | 解析 同屏双栏 */
+  .doc-dual {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    min-height: 0;
+    flex: 1;
+  }
+  .doc-col {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    container-type: inline-size;
+    border-right: 1px solid #e5e6eb;
+  }
+  .doc-col:last-child { border-right: 0; }
   .split-bar {
     align-self: stretch;
     display: flex;
@@ -203,20 +223,21 @@
     align-items: center;
     gap: 8px;
     flex-wrap: wrap;
+    flex: none;
   }
   .viewer-head .title { font-weight: 600; }
-  .view-switch { display: flex; margin-left: auto; }
-  .view-switch button { border-radius: 0; }
-  .view-switch button:first-child { border-radius: 6px 0 0 6px; }
-  .view-switch button:last-child { border-radius: 0 6px 6px 0; margin-left: -1px; }
-  .view-switch button.on { background: #3370ff; color: #fff; border-color: #3370ff; }
+  .viewer-head .sub {
+    font-size: 12px;
+    color: #8f959e;
+    font-weight: 400;
+  }
   .viewer-body {
     position: relative;
     overflow: auto;
     flex: none;
     padding: 12px;
     background: #eceef1;
-    /* 可视区域正好一页 A4：内容宽按 210:297 算出高，再加回上下内边距 */
+    /* 相对本栏宽度按 A4 比例定高 */
     height: calc((100cqw - 24px) * 297 / 210 + 24px);
   }
   .pdf-hops {
@@ -232,6 +253,7 @@
     border-bottom: 1px solid #d0d3d9;
   }
   .pdf-hops button { font-size: 12px; padding: 3px 8px; }
+  .pdf-hops button.on { border-color: #3370ff; color: #3370ff; }
   .pdf-page {
     position: relative;
     width: 100%;
@@ -312,7 +334,22 @@
     padding-bottom: 6px;
     margin-bottom: 10px;
   }
+  .page .body {
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
   .page mark { background: #fff1b8; padding: 0 2px; }
+  .page mark.focus {
+    background: #ffe58f;
+  }
+  .excerpt-hit {
+    margin-bottom: 8px;
+    padding: 6px 8px;
+    background: #fffbe6;
+    border-left: 3px solid #faad14;
+    font-size: 12px;
+    line-height: 1.55;
+  }
   .sec-bar {
     font-family: -apple-system, "PingFang SC", sans-serif;
     font-size: 12px;
@@ -490,7 +527,12 @@
     box-shadow: 0 2px 8px rgba(0,0,0,0.14);
   }
 
-  /* 很窄时才上下排列，保证演示时左右能同时看到表和页图 */
+  /* 窄屏：表与双栏上下排；双栏再叠成原件/解析上下 */
+  @media (max-width: 960px) {
+    .doc-dual { grid-template-columns: 1fr; }
+    .doc-col { border-right: 0; border-bottom: 1px solid #e5e6eb; }
+    .doc-col:last-child { border-bottom: 0; }
+  }
   @media (max-width: 720px) {
     main { grid-template-columns: 1fr !important; }
     .split-bar { display: none; }
@@ -1267,15 +1309,25 @@
   <div class="split-bar" id="split-bar" role="separator" aria-orientation="vertical" title="拖动调节左右宽度"></div>
 
   <section class="panel doc-panel">
-    <div class="viewer-head">
-      <span class="title">原文</span>
-      <div class="view-switch">
-        <button type="button" id="btn-page" class="on">原件按页</button>
-        <button type="button" id="btn-text">解析文本</button>
+    <div class="doc-dual">
+      <div class="doc-col">
+        <div class="viewer-head">
+          <span class="title">原件按页</span>
+          <span class="sub">只跳页，无黄框</span>
+        </div>
+        <div class="viewer-body" id="viewer">
+          <div class="empty">尚未选择条目</div>
+        </div>
       </div>
-    </div>
-    <div class="viewer-body" id="viewer">
-      <div class="empty">尚未选择条目</div>
+      <div class="doc-col">
+        <div class="viewer-head">
+          <span class="title">解析文本</span>
+          <span class="sub">按页全文 · mark</span>
+        </div>
+        <div class="viewer-body" id="viewer-text">
+          <div class="empty">尚未选择条目</div>
+        </div>
+      </div>
     </div>
   </section>
 </main>
@@ -1391,14 +1443,17 @@ let tableSig = "";
 let currentTab = "fb";
 let selectedKey = null;
 let shownSig = "";
-let viewMode = "page";
 let currentRefs = [];
 let currentLabel = "";
+let focusHop = 0;
 let pdfDoc = null;
 let pdfJob = "";
 let pdfEpoch = 0;
 let pageObserver = null;
 let shellTask = null;
+let textPaintToken = 0;
+let parsedPages = null;   /* parse 落盘的 [{page, text}, ...] */
+let parsedPagesJob = "";
 const renderGen = new WeakMap();
 const renderTask = new WeakMap();
 
@@ -1741,6 +1796,10 @@ function viewerEl() {
   return document.getElementById("viewer");
 }
 
+function textViewerEl() {
+  return document.getElementById("viewer-text");
+}
+
 function dropPdf() {
   if (pageObserver) pageObserver.disconnect();
   pageObserver = null;
@@ -1749,23 +1808,9 @@ function dropPdf() {
   pdfJob = "";
 }
 
-function paintShell(shell, refs) {
+function paintShell(shell) {
+  /* 方案 E：原件只跳页，清掉可能残留的黄框 */
   shell.querySelectorAll(".pdf-hl").forEach(function (node) { node.remove(); });
-  const pageNo = Number(shell.dataset.page);
-  const width = Number(shell.dataset.width);
-  const height = Number(shell.dataset.height);
-  if (!width || !height) return;
-  (refs || []).forEach(function (ref) {
-    if (Number(ref.page) !== pageNo || !ref.bbox || ref.bbox.length !== 4) return;
-    const box = ref.bbox;
-    const mark = document.createElement("div");
-    mark.className = "pdf-hl";
-    mark.style.left = (box[0] / width * 100) + "%";
-    mark.style.top = (box[1] / height * 100) + "%";
-    mark.style.width = ((box[2] - box[0]) / width * 100) + "%";
-    mark.style.height = ((box[3] - box[1]) / height * 100) + "%";
-    shell.appendChild(mark);
-  });
 }
 
 function clearHighlights() {
@@ -1810,7 +1855,7 @@ async function renderShell(shell) {
     const old = shell.querySelector("canvas");
     if (old) old.remove();
     shell.insertBefore(canvas, shell.firstChild);
-    paintShell(shell, currentRefs);
+    paintShell(shell);
   } catch (err) {
     if (err && err.name === "RenderingCancelledException") return;
     throw err;
@@ -1855,9 +1900,9 @@ async function buildShells() {
     view.innerHTML = "";
     view.appendChild(el("div", { id: "pdf-hops", class: "pdf-hops" }));
     for (let pageNo = 1; pageNo <= doc.numPages; pageNo += 1) {
-      if (epoch !== pdfEpoch || viewMode !== "page") return;
+      if (epoch !== pdfEpoch) return;
       const size = (await doc.getPage(pageNo)).getViewport({ scale: 1 });
-      if (epoch !== pdfEpoch || viewMode !== "page") return;
+      if (epoch !== pdfEpoch) return;
       const shell = el("div", { class: "pdf-page", id: "pdf-page-" + pageNo });
       shell.dataset.page = String(pageNo);
       shell.dataset.width = String(size.width);
@@ -1881,7 +1926,7 @@ async function buildShells() {
 async function ensurePdf() {
   if (!jobId) return null;
   if (pdfDoc && pdfJob === jobId) {
-    if (viewMode === "page") await buildShells();
+    await buildShells();
     return pdfDoc;
   }
   const wanted = jobId;
@@ -1895,7 +1940,7 @@ async function ensurePdf() {
     return null;
   }
   pdfDoc = doc;
-  if (viewMode === "page") await buildShells();
+  await buildShells();
   return pdfDoc;
 }
 
@@ -1921,83 +1966,145 @@ function paintHops(refs) {
   refs.forEach(function (ref, index) {
     const button = document.createElement("button");
     button.type = "button";
-    button.textContent = (index === 0 ? "当前 p." : "另见 p.") + ref.page;
-    button.onclick = function () { scrollToPage(ref.page); };
+    button.className = index === focusHop ? "on" : "";
+    button.textContent = (index === 0 ? "当前 p." : "另见 p.") + ref.page +
+      (ref.role ? " · " + ref.role : "");
+    button.onclick = function () {
+      focusHop = index;
+      paintHops(refs);
+      scrollToPage(ref.page);
+      paintTextPane(refs, focusHop);
+    };
     bar.appendChild(button);
   });
 }
 
-function showTextView(view, refs) {
-  const grouped = {};
-  refs.forEach(function (ref) {
-    const key = ref.ch || "未分章";
-    if (!grouped[key]) grouped[key] = [];
-    grouped[key].push(ref);
+function escRegex(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function highlightInText(pageText, excerpt, focused) {
+  /* 在页全文里 mark 命中句；空白差异用宽松匹配 */
+  const markOpen = focused ? '<mark class="focus" id="hit-mark">' : "<mark>";
+  if (!excerpt) return esc(pageText);
+  const exact = pageText.indexOf(excerpt);
+  if (exact >= 0) {
+    return esc(pageText.slice(0, exact)) + markOpen + esc(excerpt) + "</mark>" +
+      esc(pageText.slice(exact + excerpt.length));
+  }
+  const parts = excerpt.trim().split(/\s+/).filter(Boolean).map(escRegex);
+  if (parts.length) {
+    const re = new RegExp(parts.join("\\s+"));
+    const m = re.exec(pageText);
+    if (m) {
+      const a = m.index;
+      const b = a + m[0].length;
+      return esc(pageText.slice(0, a)) + markOpen + esc(pageText.slice(a, b)) + "</mark>" +
+        esc(pageText.slice(b));
+    }
+  }
+  return '<div class="excerpt-hit">' + markOpen + esc(excerpt) + "</mark></div>" + esc(pageText);
+}
+
+async function ensureParsedPages() {
+  /* 只读 parse 产物，不现场抽 PDF */
+  if (!jobId) return null;
+  if (parsedPagesJob === jobId && parsedPages) return parsedPages;
+  const response = await fetch("/api/jobs/" + jobId + "/parsed-text");
+  const body = await response.json();
+  if (!response.ok) throw new Error(body.error || "读解析文本失败");
+  parsedPages = body.pages || [];
+  parsedPagesJob = jobId;
+  return parsedPages;
+}
+
+async function paintTextPane(refs, hop) {
+  const view = textViewerEl();
+  if (!view) return;
+  const usable = (refs || []).filter(function (ref) { return ref.page; });
+  const token = ++textPaintToken;
+  if (!jobId) {
+    view.innerHTML = "";
+    view.appendChild(el("div", { class: "empty" }, "先跑核对任务后，这里显示 parse 全文。"));
+    return;
+  }
+  if (!usable.length) {
+    view.innerHTML = "";
+    view.appendChild(el("div", { class: "empty" }, "没有页码，标「人工看」。"));
+    return;
+  }
+  hop = Math.max(0, Math.min(hop || 0, usable.length - 1));
+  if (!(parsedPagesJob === jobId && parsedPages)) {
+    view.innerHTML = "";
+    view.appendChild(el("div", { class: "empty" }, "等待索引完成后加载解析全文…"));
+  }
+  let pages;
+  try {
+    pages = await ensureParsedPages();
+  } catch (err) {
+    if (token !== textPaintToken) return;
+    view.innerHTML = "";
+    view.appendChild(el("div", { class: "empty" }, String(err && err.message || err)));
+    return;
+  }
+  if (token !== textPaintToken) return;
+  const focusRef = usable[hop];
+  view.innerHTML = "";
+  (pages || []).forEach(function (row) {
+    const pageNo = row.page;
+    const raw = row.text || "";
+    const block = el("div", { class: "page", id: "text-p-" + pageNo });
+    const meta = el("div", { class: "meta" });
+    const left = el("span");
+    left.textContent = "解析文本";
+    const right = el("span");
+    right.textContent = "第 " + pageNo + " 页";
+    meta.appendChild(left);
+    meta.appendChild(right);
+    block.appendChild(meta);
+    const onFocusPage = focusRef && Number(focusRef.page) === Number(pageNo);
+    const excerpt = onFocusPage ? (focusRef.text || "") : "";
+    block.appendChild(el("div", { class: "body" }, highlightInText(raw, excerpt, onFocusPage)));
+    /* 非命中页略淡，突出当前出处 */
+    if (!onFocusPage) block.style.opacity = "0.55";
+    view.appendChild(block);
   });
-  Object.keys(grouped).forEach(function (chapter) {
-    const pages = grouped[chapter].map(function (ref) { return ref.page; }).filter(Boolean);
-    const span = pages.length ? " · p." + Math.min.apply(null, pages) + "–" + Math.max.apply(null, pages) : "";
-    view.appendChild(el("div", { class: "sec-bar" }, esc(chapter + span) + "　解析文本"));
-    grouped[chapter].forEach(function (ref) {
-      const block = el("div", { class: "page" });
-      const meta = el("div", { class: "meta" });
-      const left = el("span");
-      left.textContent = ref.clause || "";
-      const right = el("span");
-      right.textContent = ref.page ? "第 " + ref.page + " 页" : "";
-      meta.appendChild(left);
-      meta.appendChild(right);
-      block.appendChild(meta);
-      block.appendChild(document.createTextNode(ref.text || ""));
-      view.appendChild(block);
-    });
+  requestAnimationFrame(function () {
+    const hit = view.querySelector("#hit-mark, mark.focus");
+    if (hit) hit.scrollIntoView({ block: "center", behavior: "smooth" });
+    else if (focusRef) {
+      const sec = document.getElementById("text-p-" + focusRef.page);
+      if (sec) sec.scrollIntoView({ block: "start", behavior: "smooth" });
+    }
   });
 }
 
 function showRefs(refs, label, status) {
   currentRefs = refs || [];
   currentLabel = label || "";
+  focusHop = 0;
   shownSig = selectedKey + JSON.stringify(currentRefs);
   const usable = currentRefs.filter(function (ref) { return ref.page; });
-  if (viewMode === "text") {
-    const view = viewerEl();
-    view.innerHTML = "";
-    if (!usable.length) {
-      view.appendChild(el("div", { class: "empty" },
-        "没有页码，标「人工看」。" + (status === "check" ? " 这一行需要对照原件人工确认。" : "")));
-      return;
-    }
-    showTextView(view, usable);
-    view.scrollTop = 0;
-    return;
-  }
+  paintTextPane(usable, focusHop);
   if (!usable.length) {
     clearHighlights();
+    const view = viewerEl();
+    if (view && !pdfDoc) {
+      view.innerHTML = "";
+      view.appendChild(el("div", { class: "empty" },
+        "没有页码，标「人工看」。" + (status === "check" ? " 这一行需要对照原件人工确认。" : "")));
+    }
     return;
   }
   ensurePdf().then(function () {
-    if (viewMode !== "page" || !pdfDoc) return null;
+    if (!pdfDoc) return null;
     if (!document.getElementById("pdf-page-1")) return buildShells();
   }).then(function () {
-    if (viewMode !== "page" || !pdfDoc || !document.getElementById("pdf-page-1")) return;
-    document.querySelectorAll(".pdf-page").forEach(function (shell) { paintShell(shell, currentRefs); });
+    if (!pdfDoc || !document.getElementById("pdf-page-1")) return;
+    document.querySelectorAll(".pdf-page").forEach(function (shell) { paintShell(shell); });
     paintHops(usable);
-    scrollToPage(usable[0].page);
+    scrollToPage(usable[focusHop].page);
   }).catch(function (err) {
-    showError(String(err && err.message || err));
-  });
-}
-
-function setViewMode(mode) {
-  viewMode = mode;
-  document.getElementById("btn-page").classList.toggle("on", mode === "page");
-  document.getElementById("btn-text").classList.toggle("on", mode === "text");
-  if (mode === "text" && pageObserver) {
-    pageObserver.disconnect();
-    pageObserver = null;
-  }
-  if (currentLabel || currentRefs.length) showRefs(currentRefs, currentLabel);
-  else if (mode === "page" && jobId) ensurePdf().catch(function (err) {
     showError(String(err && err.message || err));
   });
 }
@@ -2089,7 +2196,10 @@ async function begin(sample, mode) {
   currentLabel = "";
   pdfEpoch += 1;
   dropPdf();
+  parsedPages = null;
+  parsedPagesJob = "";
   viewerEl().innerHTML = '<div class="empty">正在打开原件…</div>';
+  textViewerEl().innerHTML = '<div class="empty">parse 完成后显示全文；点表行高亮出处</div>';
   setBusy(true);
   poll();
   ensurePdf().catch(function (err) {
@@ -2182,8 +2292,6 @@ document.getElementById("btn-run").onclick = function () {
 document.getElementById("btn-export").onclick = function () {
   if (jobId) window.location = "/api/jobs/" + jobId + "/export.xlsx";
 };
-document.getElementById("btn-page").onclick = function () { setViewMode("page"); };
-document.getElementById("btn-text").onclick = function () { setViewMode("text"); };
 document.getElementById("ask-send").onclick = function () {
   const input = document.getElementById("ask-text");
   ask(input.value);
@@ -2208,7 +2316,7 @@ function applySplit(left) {
   if (left < splitMin) left = splitMin;
   if (left > max) left = max;
   splitLeft = left;
-  splitMain.style.gridTemplateColumns = left + "px " + barW + "px minmax(280px, 1fr)";
+  splitMain.style.gridTemplateColumns = left + "px " + barW + "px minmax(420px, 1fr)";
 }
 
 splitBar.addEventListener("pointerdown", function (event) {
@@ -2224,7 +2332,7 @@ splitBar.addEventListener("pointermove", function (event) {
 function endSplit() {
   if (!document.body.classList.contains("splitting")) return;
   document.body.classList.remove("splitting");
-  if (viewMode !== "page" || !pdfDoc) return;
+  if (!pdfDoc) return;
   viewerEl().querySelectorAll(".pdf-page canvas").forEach(function (canvas) {
     renderShell(canvas.parentElement);
   });
@@ -2235,7 +2343,7 @@ splitBar.addEventListener("pointercancel", endSplit);
 let resizeTimer = null;
 window.addEventListener("resize", function () {
   if (splitLeft != null) applySplit(splitLeft);
-  if (viewMode !== "page" || !pdfDoc) return;
+  if (!pdfDoc) return;
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(function () {
     viewerEl().querySelectorAll(".pdf-page canvas").forEach(function (canvas) {

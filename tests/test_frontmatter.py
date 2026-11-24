@@ -75,6 +75,29 @@ def test_long_header_is_not_matched():
     assert is_frontmatter(t, "notice") is False
 
 
+def test_to_chunks_one_per_item_with_table_fact():
+    """前附表每个条目一条 chunk，且每条都带表级事实（总条数）。
+
+    前附表被排除出条款树后，内容只能靠这条路径进索引；
+    北京「01包：8000元」只在这个表里出现，少一条就问不出金额。
+    """
+    from tender.frontmatter import FrontItem, FrontMatter, to_chunks
+
+    fm = FrontMatter(table_id="x:p7:1", pages=[7], items=[
+        FrontItem(no="12.1", name="投标保证金", value="01包：8000元", page=8),
+        FrontItem(no="12.2", name="交纳方式", value="电汇或保函", page=8),
+    ])
+    chunks = to_chunks([fm], sections=[{"type": "notice", "title": "第二章 投标人须知",
+                                        "start_page": 7, "end_page": 22}],
+                       source="x.pdf", heights={8: 842.0})
+    assert len(chunks) == 2
+    assert "8000" in chunks[0]["text"]
+    assert chunks[0]["kind"] == "frontmatter"
+    assert chunks[0]["page"] == 8
+    assert chunks[0]["section_type"] == "notice"
+    assert "2 条" in chunks[0]["context"]
+
+
 # ---------- 行抽取 ----------
 
 def test_from_table_basic():

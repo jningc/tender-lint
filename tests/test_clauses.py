@@ -191,7 +191,9 @@ def test_bare_number_heading_is_parent():
     nodes = build_clauses([_page(1, blocks)], SECTIONS)
     by_text = {n.text: n for n in nodes}
     head = by_text["12 投标保证金"]
-    assert head.depth == 1
+    # depth 现在由栈推导：这份测试文档没有章，所以第一个标题就是顶层（0）。
+    # 旧值是写死的 1（DEPTH_FIXED 那套），不代表它的真实层级。
+    assert head.depth == 0
     assert by_text["12.1 甲"].parent_id == head.id
     assert by_text["12.2 乙"].parent_id == head.id
     assert head.parent_id is None

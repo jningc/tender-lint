@@ -24,7 +24,7 @@ from pathlib import Path
 #: 第 1 列（条款号/序号）
 NO_KEYS = ("条款号", "序号", "编号", "项号", "条款")
 #: 第 2 列（项目名）
-NAME_KEYS = ("项目内容", "项目名称", "项目", "名称", "条款名称", "内容摘要")
+NAME_KEYS = ("项目内容", "项目名称", "项目", "名称", "条款名称", "内容摘要", "条目")
 #: 第 3 列（编列内容）
 VALUE_KEYS = ("编列内容", "内容", "要求", "编列内容/要求", "约定内容")
 
@@ -166,6 +166,53 @@ def from_table(table) -> FrontMatter:
     return FrontMatter(table_id=getattr(table, "id", ""),
                        pages=list(getattr(table, "pages", []) or []),
                        items=items)
+
+
+def to_chunks(fms: list[FrontMatter], sections: list[dict] | None = None,
+              source: str = "doc.pdf", heights: dict[int, float] | None = None) -> list[dict]:
+    """把前附表条目转成索引 chunk，和条款 chunk 进同一个库。
+
+    为什么需要这个：前附表被排除出条款树（它是稀疏引用表，进树会让编号乱序），
+    但排除的代价是**内容从索引里消失**——北京「01包：8000元」只在 p8 附表现，
+    实测 chunk 里搜不到 `8000`，等于关键金额丢了。
+
+    所以前附表走独立的 chunk：一条一行，`kind="frontmatter"`，不参与建树。
+    表级事实（总条数）每条都带一份——和评分表 small chunk 同一个道理：
+    问「保证金多少」时，单条里没有「这是一张 17 条的对照表」这个信息。
+    """
+    heights = heights or {}
+    sec_by_page = {}
+    for s in sections or []:
+        for pno in range(int(s.get("start_page") or 0), int(s.get("end_page") or 0) + 1):
+            sec_by_page.setdefault(pno, s)
+
+    chunks: list[dict] = []
+    for fm in fms:
+        total = len(fm.items)
+        for it in fm.items:
+            sec = sec_by_page.get(it.page) or {}
+            # 值里常自带名称前缀（`项目属性：■服务 □货物`），再拼一次就成
+            # 「项目属性：项目属性：■服务」了
+            val = (it.value or "").strip()
+            body = val if val.startswith(it.name) else f"{it.name}：{val}"
+            text = f"【前附表】{it.no} {it.name}\n{body}" if it.no \
+                else f"【前附表】{it.name}\n{body}"
+            chunks.append({
+                "text": text,
+                # context 带表级事实：这条属于一张多少条的对照表
+                "context": f"（本表 {total} 条，列的是对本项目须知的补充、修改与取值）\n{text}",
+                "page": it.page,
+                "page_height": heights.get(it.page) or 842.0,
+                "source": source,
+                "section_type": sec.get("type") or "notice",
+                "section_types": sec.get("types") or [sec.get("type") or "notice"],
+                "section_title": sec.get("title") or "",
+                "bbox": list(it.bbox),
+                "kind": "frontmatter",
+                "clause_id": f"{source}:fm:{it.no or len(chunks)}",
+                "number": it.no,
+            })
+    return chunks
 
 
 def extract(tables: list, section_types: dict[int, str] | None = None) -> list[FrontMatter]:

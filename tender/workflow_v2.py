@@ -9,7 +9,6 @@ import json
 import os
 from pathlib import Path
 
-from tender.parse import page_texts
 from tender.stages import compare_stage, extract_stage, parse_stage, verify_stage
 from tender.workflow import _progress_cb, load_company
 
@@ -44,8 +43,8 @@ def _run(pdf_path, company_path, reuse_index: bool) -> dict:
 
     folder = _artifact_dir(pdf_path)
 
-    # 1 解析：章节树 + 坐标；建索引或复用
-    doc, index = parse_stage.run(pdf_path, reuse_index=reuse_index)
+    # 1 解析：章节树 + 坐标 + 按页正文；建索引或复用
+    doc, index, page_texts_list = parse_stage.run(pdf_path, reuse_index=reuse_index)
     folder.mkdir(parents=True, exist_ok=True)
     (folder / "parse.json").write_text(
         json.dumps(doc.model_dump(), ensure_ascii=False, indent=2), encoding="utf-8")
@@ -63,7 +62,7 @@ def _run(pdf_path, company_path, reuse_index: bool) -> dict:
 
     # 4 校验：机械回查（页码/数值/交叉引用/串表），默认开；enforce 时改表
     _emit("verify", "running", "回查页码、数值、交叉引用")
-    texts = page_texts(pdf_path)
+    texts = {row["page"]: row["text"] for row in page_texts_list}
     verified = verify_stage.run(cmp, ex, texts=texts, page_count=doc.page_count,
                                 sections=doc.sections, enforce=ENFORCE)
     verify_stage.dump(verified, folder)
@@ -84,6 +83,7 @@ def _run(pdf_path, company_path, reuse_index: bool) -> dict:
         "degraded": ex.degraded,
         "index": index,
         "pages": [],
+        "page_texts": page_texts_list,
         "page_count": doc.page_count,
         "engine": "v2",
         "timings": ex.timings,

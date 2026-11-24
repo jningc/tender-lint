@@ -121,8 +121,11 @@ def _hit_blob(hits: list[dict]) -> str:
     used = 0
     for i, h in enumerate(hits, start=1):
         body = h.get("context") or h.get("text") or ""
+        # 前附表条目已经是「字段：值」形态，标出来免得模型把它当成待抽的正文条款；
+        # 不标的话它会和正文混在一起，抽行时反而更容易漏（温岭 wl-validity 实测）。
+        tag = " 【资料表条目·已结构化】" if h.get("kind") == "frontmatter" else ""
         block = (
-            f"[{i}] 第{h.get('page')}页 {h.get('section_title')}\n"
+            f"[{i}] 第{h.get('page')}页 {h.get('section_title')}{tag}\n"
             f"bbox={h.get('bbox')}\n{body}"
         )
         if parts and used + len(block) > HIT_BLOB_MAX_CHARS:
@@ -272,14 +275,10 @@ def _formula_hits(index: TenderIndex, types: list[str]) -> list[dict]:
         if store is None:
             continue
         for chunk in store.chunks or []:
-            needle = ""
-            for block in chunk.get("blocks") or []:
-                bt = block.get("text") or ""
-                if _looks_score_formula(bt):
-                    needle = bt
-                    break
-            if not needle and _looks_score_formula(chunk.get("text") or ""):
-                needle = chunk["text"]
+            # 2026-11-23：chunk 不再带 blocks，直接在整段文本上正则找公式。
+            # 公式段通常很短，整段匹配不影响命中；`_looks_score_formula` 本身就是正则。
+            _txt = chunk.get("text") or ""
+            needle = _txt if _looks_score_formula(_txt) else ""
             if not needle:
                 continue
             key = (chunk.get("page"), needle[:40])
@@ -565,7 +564,7 @@ def _run_check(pdf_path, company_path, reuse_index: bool = False) -> dict:
     from tender.stages.parse_stage import run as parse_run
 
     print(f"{'载入已有向量库' if reuse_index else '1/4 解析'} {pdf_path}", flush=True)
-    doc, index = parse_run(pdf_path, reuse_index=reuse_index)
+    doc, index, page_texts_list = parse_run(pdf_path, reuse_index=reuse_index)
     sections = index.sections
     for sec in sections:
         label = TYPE_LABEL.get(sec["type"], sec["type"])
@@ -601,6 +600,7 @@ def _run_check(pdf_path, company_path, reuse_index: bool = False) -> dict:
         "degraded": out.get("degraded") or {},
         "index": index,
         "pages": [],
+        "page_texts": page_texts_list,
         "page_count": doc.page_count,
     }
 

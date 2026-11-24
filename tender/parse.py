@@ -17,11 +17,15 @@ bbox 为 PDF 点坐标 [x0, y0, x1, y1]，原点在左上。
 且规范化后（数字抹成 #）在 ≥ 30% 的页里重复出现。
 """
 
+import json
 import re
 from collections import Counter
 from pathlib import Path
 
 import pymupdf as fitz
+
+#: 索引建完后落盘的按页正文，与向量库同目录；前端解析栏只读 job 里这份
+PAGE_TEXTS_NAME = "page_texts.json"
 
 #: 页眉页脚所在边缘带（页高占比）
 EDGE_BAND = 0.15
@@ -229,10 +233,37 @@ def pdf_toc(pdf_path) -> list[dict]:
         doc.close()
 
 
+def _page_texts_path(pdf_path) -> Path:
+    return Path("data") / "tender_index" / Path(pdf_path).stem / PAGE_TEXTS_NAME
+
+
+def pages_as_texts(pages: list[dict]) -> list[dict]:
+    """parse_pdf 产物 → [{page, text}, ...]，按页码排序。"""
+    rows = [{"page": int(p["page"]), "text": p.get("text") or ""} for p in pages]
+    rows.sort(key=lambda r: r["page"])
+    return rows
+
+
+def save_page_texts(pdf_path, pages: list[dict]) -> Path:
+    """把 parse 得到的按页正文落盘（与索引同目录）。"""
+    path = _page_texts_path(pdf_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(pages_as_texts(pages), ensure_ascii=False),
+        encoding="utf-8",
+    )
+    return path
+
+
+def load_page_texts(pdf_path) -> list[dict]:
+    """读 parse 已落盘的按页正文。没有文件则 FileNotFoundError。"""
+    path = _page_texts_path(pdf_path)
+    if not path.is_file():
+        raise FileNotFoundError(f"没有解析页文本: {path}")
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return [{"page": int(item["page"]), "text": item.get("text") or ""} for item in data]
+
+
 def page_texts(pdf_path) -> dict[int, str]:
-    """{页码: 该页纯文本}。校验段要比对原文，但不想要整份 blocks，所以单独给一个轻的。"""
-    doc = fitz.open(pdf_path)
-    try:
-        return {i + 1: doc[i].get_text() for i in range(doc.page_count)}
-    finally:
-        doc.close()
+    """{页码: 该页纯文本}。只读 parse 落盘，与解析栏同一份。"""
+    return {row["page"]: row["text"] for row in load_page_texts(pdf_path)}

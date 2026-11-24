@@ -51,7 +51,7 @@ def cmd_index(args):
     from tender.step_out import format_index, write_step
 
     print(f"解析并建索引 {args.pdf}", flush=True)
-    _doc, index = parse_run(args.pdf, reuse_index=False)
+    _doc, index, _page_texts = parse_run(args.pdf, reuse_index=False)
     brief, full = format_index(index)
     path = write_step(args.pdf, "03_index.txt", full)
     _show(brief, path)
@@ -78,7 +78,7 @@ def cmd_ask(args):
     from tender.workflow import load_company
 
     # 复用与核对同一套索引（含表结构和条款切分），避免提问框另建一份无表库
-    _doc, index = parse_run(args.pdf, reuse_index=True)
+    _doc, index, _page_texts = parse_run(args.pdf, reuse_index=True)
     set_context(index, load_company(args.company))
     out = ask_question(args.question)
     lines = [args.question, ""]

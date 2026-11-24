@@ -15,7 +15,7 @@ from rank_bm25 import BM25Okapi
 from tender.clauses import prefix_of
 from tender.sections import TYPE_LABEL, section_of_page, types_of
 
-INDEX_VERSION = 9  # 9 = 索引里带表格结构；8 及以下旧缓存必须重建
+INDEX_VERSION = 12  # 12 = 并入评分表行 chunk；11 及以下必须重建
 
 #: 条款模式的返回上下文：父标题链 + 本条，字数上限
 #: 拼过「同前缀整组兄弟」（单条 3000 字，正例掉到 10/18），也试过滑动窗口，
@@ -64,23 +64,9 @@ def _tokenize(text: str) -> list[str]:
     return [ch for ch in text if not ch.isspace()]
 
 
-def pick_block(query: str, blocks: list[dict], page_height: float = 842.0) -> dict | None:
-    """在段内挑和 query 字面重合最多的那一块——比整段并集窄得多。
-
-    同分时挑更矮的块（更可能是一行条款而不是一段正文）。返回
-    {"bbox": [...], "kind": "block"|"page"}；没有块返回 None。
-    """
-    if not blocks:
-        return None
-    q = set(_tokenize(query))
-    best, best_score, best_h = None, -1, float("inf")
-    for b in blocks:
-        score = len(q & set(_tokenize(b.get("text") or "")))
-        h = b["bbox"][3] - b["bbox"][1]
-        if score > best_score or (score == best_score and h < best_h):
-            best, best_score, best_h = b, score, h
-    kind = "page" if best_h > page_height * 0.6 else "block"
-    return {"bbox": list(best["bbox"]), "kind": kind}
+# 2026-11-23 删除 `pick_block()`：它算出的窄框只喂给前端，而前端早已不画框
+# （`paintShell` 主动清 `pdf-hl`）；`bbox_kind` 全项目零引用。
+# 证据定位由「页码 + 条款编号」承担，不依赖坐标。保留的 bbox 只是解析层的几何副产品。
 
 
 def chunk_pages(pages: list[dict], sections: list[dict], target_len: int = 380) -> list[dict]:
@@ -107,15 +93,7 @@ def chunk_pages(pages: list[dict], sections: list[dict], target_len: int = 380) 
             "section_type": sec["type"],
             "section_types": types_of(sec),
             "section_title": sec["title"],
-            "bbox": box,  # 段的并集，作兜底
-            # 块的版面线索跟着进索引：切条款要用字号，去噪要用页眉标。
-            # 这里只搬运字段，pick_block 的选块逻辑不动。
-            "blocks": [{
-                "text": b["text"],
-                "bbox": list(b["bbox"]),
-                "max_size": b.get("max_size"),
-                "is_header": bool(b.get("is_header")),
-            } for b in buf],
+            "bbox": box,  # 段的并集
         })
         buf, buf_len = [], 0
 
@@ -173,13 +151,7 @@ def chunk_clauses(nodes, pages: list[dict], sections: list[dict]) -> list[dict]:
             "section_type": node.section or sec.get("type"),
             "section_types": types_of(sec),
             "section_title": sec.get("title") or "",
-            "bbox": list(node.bbox),          # 条款级并集，不再是段并集
-            "blocks": [{                       # 让 pick_block 有东西可选
-                "text": node.text,
-                "bbox": list(node.bbox),
-                "max_size": None,
-                "is_header": False,
-            }],
+            "bbox": list(node.bbox),          # 条款级并集
             "kind": "clause" if node.is_clause else "block",
             "clause_id": node.id,
             "number": node.number,
@@ -202,7 +174,6 @@ class SectionIndex:
                 "section_type": c["section_type"],
                 "section_title": c["section_title"],
                 "bbox": ",".join(str(x) for x in c["bbox"]),
-                "blocks": json.dumps(c.get("blocks") or [], ensure_ascii=False),
                 "source": c.get("source"),
                 "context": c.get("context") or "",
                 "kind": c.get("kind") or "",
@@ -236,7 +207,6 @@ class SectionIndex:
                 "section_type": doc.metadata.get("section_type"),
                 "section_title": doc.metadata.get("section_title"),
                 "bbox": bbox,
-                "blocks": json.loads(doc.metadata.get("blocks") or "[]"),
                 "context": doc.metadata.get("context") or "",
                 "kind": doc.metadata.get("kind") or "",
                 "clause_id": doc.metadata.get("clause_id") or "",
@@ -263,7 +233,6 @@ class SectionIndex:
             "section_type": doc.metadata.get("section_type"),
             "section_title": doc.metadata.get("section_title"),
             "bbox": bbox,
-            "blocks": json.loads(doc.metadata.get("blocks") or "[]"),
             "context": doc.metadata.get("context") or "",
             "kind": doc.metadata.get("kind") or "",
             "clause_id": doc.metadata.get("clause_id") or "",
@@ -271,17 +240,20 @@ class SectionIndex:
         }
 
     def _hit(self, query: str, chunk: dict) -> dict:
-        """把段变成检索命中：bbox 换成段内最匹配的块，块级框才算「能定位」。"""
-        precise = pick_block(query, chunk.get("blocks") or [], chunk.get("page_height") or 842.0)
+        """把段变成检索命中。
+
+        只保留 chunk 自己的 bbox（段/条款并集）。曾经在这里用 `pick_block()` 换成
+        更窄的块框，但那个框没有消费者（UI 只跳页不画框），2026-11-23 移除。
+        """
         return {
             "text": chunk["text"],
             "page": chunk["page"],
             "source": chunk.get("source"),
             "section_type": chunk.get("section_type"),
             "section_title": chunk.get("section_title"),
-            "bbox": precise["bbox"] if precise else chunk["bbox"],
+            "bbox": chunk["bbox"],
             "bbox_union": chunk["bbox"],
-            "bbox_kind": chunk.get("kind") or (precise["kind"] if precise else "chunk"),
+            "kind": chunk.get("kind") or "clause",
             "context": chunk.get("context") or "",
             "clause_id": chunk.get("clause_id") or "",
             "number": chunk.get("number") or "",
@@ -456,7 +428,8 @@ def load_tender_index(pdf_path) -> TenderIndex:
 
 
 def build_tender_index(pages: list[dict], sections: list[dict], pdf_path: str, on_chapter=None,
-                       unit: str = "paragraph", clauses=None, tables=None) -> TenderIndex:
+                       unit: str = "paragraph", clauses=None, tables=None,
+                       extra_chunks: list[dict] | None = None) -> TenderIndex:
     """切块并按类型建库，并把向量库写到 data/tender_index。
 
     `unit="paragraph"` 是旧行为（380 字拼段）；`unit="clause"` 用条款树切分，
@@ -470,6 +443,10 @@ def build_tender_index(pages: list[dict], sections: list[dict], pdf_path: str, o
     else:
         unit = "paragraph"
         chunks = chunk_pages(pages, sections)
+    # 前附表条目等「不属于条款树但必须能被检索到」的内容，走 `extra_chunks` 并进来。
+    # 北京「01包：8000元」只在前附表出现，不并进来就搜不到。
+    if extra_chunks:
+        chunks = list(chunks) + list(extra_chunks)
     grouped = {}
     for c in chunks:
         # 一章多类型时，同一个 chunk 进多个库（资格审查与评标办法要两边都搜得到）

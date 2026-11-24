@@ -23,7 +23,7 @@ from tender.parse import body_size
 from tender.sections import section_of_page
 
 #: 优先顺序固定，探测只决定「哪些档算起点」，不改这个次序
-BAND_ORDER = ("第X条", "X.Y", "（一）", "①", "1.", "一、", "（1）", "字号")
+BAND_ORDER = ("第X条", "X.Y", "（一）", "①", "1.", "一、", "一 空格", "（1）", "字号")
 
 #: 一档编号至少要占多少块才算「主力」
 MIN_BAND_SHARE = 0.02
@@ -38,12 +38,17 @@ _RE = {
     "X.Y": re.compile(
         r"^(\d{1,2}(?:\.\d{1,2}){1,3})"
         r"(?=[\s\u4e00-\u9fa5（(【]|$)"
-        r"(?!\s*(?:元|万|亿|[%％]|个|年|月|日|天|倍|人|份|页|分|米|吨))"
+        r"(?!\s*(?:元|万|亿|[%％]|个|年|月|日|天|倍|人|份|页|分|米|吨|"
+        r"公里|千米|公顷|亩|平方米|立方米|株|棵|头|辆|套|件|台|座|处|次|户|家|名))"
     ),
     "（一）": re.compile(r"^[（(][一二三四五六七八九十]{1,3}[）)]"),
     "①": re.compile(r"^[①-⑳]"),
     "1.": re.compile(r"^(\d{1,2}[.、])(?![\d%％元万亿个年月日天倍人份页])"),
     "一、": re.compile(r"^[一二三四五六七八九十]{1,3}[、]"),
+    # 空格写法：「一   说  明」「二   招标文件」——北京第二章整章都用这个，
+    # 只认顿号会让第二章从「投标人须知资料表」直接跳到 2.2，中间 20 多条全丢。
+    # 要求 ≥2 个空格，正文「一 般」只有一个，不会被误判。
+    "一 空格": re.compile(r"^[一二三四五六七八九十]{1,3}[\s\u3000]{2,}[\u4e00-\u9fa5]"),
     "（1）": re.compile(r"^[（(]\d{1,2}[）)]"),
 }
 
@@ -72,8 +77,10 @@ class ClauseNode:
     bbox: list[float]
     text: str
     blocks: int = 1
+    truncated: bool = False        # 吃太多被断开（内容不全，但节点仍在目录里）
     depth: int = 0
-    parent_id: str | None = None   # 栈顶标题（父），由 heading_depth 建树得到
+    family: str = ""               # 编号族（cn/digit/decimal1/...），同族才同级
+    parent_id: str | None = None   # 栈顶标题（父），由族 + 栈建树得到
 
     @property
     def is_clause(self) -> bool:
@@ -82,6 +89,11 @@ class ClauseNode:
 
 #: 章标题
 _CHAP = re.compile(r"^第[一二三四五六七八九十百零0-9]{1,4}章[\s]*[^\s，,。）)】、《]")
+
+#: 表/附件类标题——书签常把它们标成 L2，但它们不是结构层级。
+#: 实测：崇左书签把「…项目分标表」标成 d1，把后续 `二、投标人的资格要求`
+#: 挤到 d3，整章的层级全歪。宁可少一个节点，也不给它错层级。
+_NON_STRUCTURAL = re.compile(r"(表|清单|附件)$")
 
 
 def _toc_depth(entry: dict) -> int | None:
@@ -100,9 +112,28 @@ def _toc_depth(entry: dict) -> int | None:
         return 0 if _CHAP.match(_norm(title)) else 1
     return max(1, level - 1)
 #: 裸数字标题：`12 投标保证金`、`27 代理费`、`4 样品` —— 没有点号，但它是父
-_BARE = re.compile(r"^(\d{1,2})\s*[\u4e00-\u9fa5][^\n]{0,18}$")
-#: 固定深度的档位（X.Y 系按点号数动态算）
+# 汉字至少两个：「3 年」这类正文数字不是标题，「4 样品」「12 投标保证金」才是。
+# 尾部放宽到 30 字：`2 资金来源、项目属性、科研仪器设备采购、核心产品` 有 24 字，
+# 卡在 20 会让它掉到书签分支，书签的 L 级又把它排错一层（实测北京 2/3/4 缩进错位）。
+_BARE = re.compile(r"^(\d{1,2})\s*[\u4e00-\u9fa5]{2,}[^\n]{0,30}$")
+#: 固定深度的档位（X.Y 系按点号数动态算）。
+#: **只给 `heading_depth()` 用**（纯函数、不知道上下文）；建树走下面的族+栈。
 DEPTH_FIXED = {"1.": 1, "一、": 1, "（一）": 4, "（1）": 5, "①": 6}
+
+#: 编号族——决定「谁和谁同级」。固定深度（`1.` 与 `一、` 都是 1）会把
+#: `1.项目编号` 判成 `一、项目基本情况` 的兄弟；`（一）` 给 4 会让它跳级。
+#: 族 ≠ 深度：深度由 `_pop_to_family()` 按「它出现在谁后面」推导。
+FAMILY_OF_BAND = {
+    "第X条": "article",
+    "一、": "cn",            # 一、二、三、（含「一   说明」空格写法）
+    "一 空格": "cn",
+    "1.": "digit",           # 1. 2. 3.
+    "（一）": "cn_paren",     # （一）
+    "（1）": "digit_paren",   # （1）
+    "①": "circled",
+    "裸数字": "bare",
+    "字号": "size",
+}
 
 
 def _norm(text: str) -> str:
@@ -175,6 +206,71 @@ def heading_depth(block: dict, bands: list[str], body: float | None,
     if _BARE.match(line) and len(line) <= 20 and (not body or (block.get("max_size") or 0) >= body * 0.99):
         return 1
     return None
+
+
+def heading_family(block: dict, bands: list[str], body: float | None,
+                   section_type: str | None = None) -> tuple[str, str] | None:
+    """块的 (编号族, 编号原文)；正文返回 `None`。
+
+    族只回答「这两个标题同类吗」，不回答「它多深」——因为同一个 `1.` 在不同
+    位置深度不同：跟在 `一、` 后面时它是子级，单独出现时它是顶层。
+    深度由 `_pop_to_family()` 用栈推导。
+    """
+    line = (block.get("text") or "").replace("\n", " ").strip()
+    if not line:
+        return None
+    if _CHAP.match(line) and len(line) <= 30:
+        return "chapter", ""
+    for band in BAND_ORDER:
+        if band == "字号" or band not in bands:
+            continue
+        if band == "（1）" and section_type != "score":
+            continue
+        m = _RE[band].match(line)
+        if not m:
+            continue
+        number = m.group(0).strip()
+        if band == "X.Y":
+            # 点号数就是族内层级：`3.1` 与 `3.1.1` 是两个族，自动嵌套
+            return f"decimal{number.count('.')}", number
+        return FAMILY_OF_BAND[band], number
+    m = _BARE.match(line)
+    if m:
+        # 长度只算到第一个冒号/句号——裸数字标题后面常紧跟内容
+        # （`27 代理费 收费对象：□采购人 ■中标供应商`），全行长度没有意义
+        head = re.split(r"[：:。；;]", line)[0]
+        if len(head) <= 26 and (not body or (block.get("max_size") or 0) >= body * 0.99):
+            return "bare", m.group(1)
+    return None
+
+
+#: family → 展示用的 band 名（族是内部概念，报告里还是印「一、」「X.Y」这些）
+_BAND_OF_FAMILY = {v: k for k, v in FAMILY_OF_BAND.items()}
+
+
+def _band_of(family: str) -> str:
+    if family.startswith("decimal"):
+        return "X.Y"
+    if family.startswith("toc"):
+        return "书签"
+    return _BAND_OF_FAMILY.get(family, family)
+
+
+def _pop_to_family(stack: list["ClauseNode"], family: str) -> int:
+    """按族回溯，返回新标题的深度。
+
+    - 栈里有同族 → 回到它那一层，深度相同（同级），把同族及更深的都弹掉
+    - 栈里没有 → 这是新族，作栈顶的子级（深度 +1）
+
+    实测效果：`一、` 后的 `1.` 深度从 1 变 2（北京不再同级错位）；
+    温岭 `二、` 后的 `（一）` 从 4 变 2（不再跳级）。
+    """
+    for i in range(len(stack) - 1, -1, -1):
+        if stack[i].family == family:
+            depth = stack[i].depth
+            del stack[i:]
+            return depth
+    return (stack[-1].depth + 1) if stack else 0
 
 
 def _first_line(block: dict) -> str:
@@ -274,10 +370,14 @@ def _absorb(node: "ClauseNode", block: dict, pno: int) -> None:
         node.continued = node.page_start != node.page_end
 
 
-def _demote(node: "ClauseNode") -> None:
-    """超限的条款降级成 block，别让它冒充一条条款去拿证据。"""
-    node.kind = "block"
-    node.band = "溢出"
+def _cut(node: "ClauseNode") -> None:
+    """超限时断开并标记截断，**不降级**。
+
+    旧实现把超限节点降成 `block`，副作用是结构节点从目录里凭空消失——崇左
+    「一、项目基本情况」因为吸到 p3–p5（跨 3 页 > `MAX_CLAUSE_PAGES`）就被抹掉了，
+    目录里根本看不到这一节。宁可标「内容截断」，也不能让它不见了。
+    """
+    node.truncated = True
 
 
 #: 多级编号，如 5.1.1
@@ -365,23 +465,52 @@ def build_clauses(pages: list[dict], sections: list[dict],
             if boxes and _inside_any(block["bbox"], boxes):
                 continue
             toc_hit = toc_hits.get((pno, bi))
-            depth = toc_hit[0] if toc_hit else heading_depth(block, bands, body, stype)
-            if depth == 0 and not toc_hit and chap_per_page.get(pno, 0) > 1:
-                depth = None      # 目录页 / 前附表索引，不是真章标题
-            if depth is not None:
-                while stack and stack[-1].depth >= depth:
-                    stack.pop()
+            fam: str | None = None
+            number = ""
+            depth = 0
+
+            if toc_hit:
+                # 书签是权威信号（Docling 也是把它排第一）：深度照书签，栈调到那层。
+                # 但表/附件类标题（「分标表」「投标人须知资料表」）不建层级节点——
+                # 书签常把它们标成 L2，一旦入栈就会把后面的 `二、` 挤深两级。
+                title = _norm(toc_hit[1] or "")
+                if toc_hit[0] > 0 and _NON_STRUCTURAL.search(title) and not _RE["X.Y"].match(title):
+                    fam = None
+                else:
+                    hf = heading_family(block, bands, body, stype)
+                    if hf is not None and hf[0] != "size":
+                        # 块自带编号时以编号族为准：Word 导出的书签常把
+                        # 「一 说明」和「1采购人…」都标 L2，照抄就会把子级排成兄弟。
+                        fam, number = hf
+                        depth = _pop_to_family(stack, fam)
+                    else:
+                        depth = toc_hit[0]
+                        fam = f"toc{depth}"
+                        while stack and stack[-1].depth >= depth:
+                            stack.pop()
+            else:
+                hf = heading_family(block, bands, body, stype)
+                if hf is not None:
+                    fam, number = hf
+                    if fam == "chapter" and chap_per_page.get(pno, 0) > 1:
+                        fam = None        # 目录页 / 前附表里的章节索引，不是真章标题
+                    elif fam == "chapter":
+                        depth = 0
+                    else:
+                        depth = _pop_to_family(stack, fam)
+
+            if fam is not None:
                 parent = stack[-1] if stack else None
                 seq += 1
-                is_chapter = depth == 0
-                hit = is_start(block, bands, body, stype)
+                is_chapter = fam == "chapter"
                 cur = ClauseNode(
                     id=f"{stem}:c{seq:04d}",
                     kind="heading" if is_chapter else "clause",
-                    band="章" if is_chapter else (toc_hit[1] if toc_hit else (hit[0] if hit else "裸数字")),
-                    number="" if is_chapter else (hit[1] if hit else _first_line(block)[:16]),
+                    band="章" if is_chapter else (toc_hit[1] if toc_hit else _band_of(fam)),
+                    number="" if is_chapter else (number or _first_line(block)[:16]),
                     section=stype, page_start=pno, page_end=pno, continued=False,
-                    bbox=list(block["bbox"]), text=block["text"], depth=depth,
+                    bbox=list(block["bbox"]), text=block["text"],
+                    depth=depth, family=fam,
                     parent_id=parent.id if parent is not None else None,
                 )
                 nodes.append(cur)
@@ -399,8 +528,7 @@ def build_clauses(pages: list[dict], sections: list[dict],
                 continue
             _absorb(cur, block, pno)
             if cur.kind != "heading" and _overflowed(cur):
-                if cur.kind == "clause":
-                    _demote(cur)
+                _cut(cur)       # 标记截断，节点留在目录里
                 cur = None
     return nodes
 
@@ -415,7 +543,7 @@ def stats(nodes: list[ClauseNode]) -> dict:
         "clause": sum(1 for n in nodes if n.is_clause),
         "heading": sum(1 for n in nodes if n.kind == "heading"),
         "block": sum(1 for n in nodes if not n.is_clause and n.kind != "heading"),
-        "overflow": sum(1 for n in nodes if n.band == "溢出"),
+        "overflow": sum(1 for n in nodes if n.truncated),
         "parented": sum(1 for n in nodes if n.is_clause and n.parent_id),
         "continued": sum(1 for n in nodes if n.continued),
         "blocks": sum(n.blocks for n in nodes),

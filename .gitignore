@@ -16,3 +16,5 @@ data/tender_upload.pdf
 
 data/regression/
 data/clause_tree/
+eval/regression/run-*.json
+eval/review.html

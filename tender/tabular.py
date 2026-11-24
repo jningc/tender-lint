@@ -497,9 +497,16 @@ def _can_merge(upper: dict, lower: dict) -> bool:
     upper_bbox = upper.get("last_bbox", upper["bbox"])
     upper_h = upper.get("last_page_height", upper["page_height"])
     lower_h = lower["page_height"]
-    if upper_bbox[3] < upper_h * EDGE_BOTTOM:
-        return False
-    if lower["bbox"][1] > lower_h * EDGE_TOP:
+    # 「两侧都贴边」太严：北京 p7 的前附表下沿是页脚区（y1/H = 0.82），永远到不了
+    # 0.85，于是 p7 和 p8 被切成两张表——第二张还把数据行 `11.2 投标报价 …` 当了表头。
+    # 单侧贴边就够：新表不会从页面顶端 15% 以内起排。
+    # 两侧都贴边最可靠；只贴一侧时，另一侧也必须「接近」边界——
+    # 否则会把两页中间各自独立的表接起来（上表排到 47% 也当下表续页）。
+    upper_breaks = upper_bbox[3] >= upper_h * EDGE_BOTTOM       # 严格贴底
+    upper_near = upper_bbox[3] >= upper_h * 0.72                # 接近页底（页脚区会占位）
+    lower_starts = lower["bbox"][1] <= lower_h * EDGE_TOP       # 严格贴顶
+    lower_near = lower["bbox"][1] <= lower_h * 0.30             # 接近页顶
+    if not ((upper_breaks or upper_near) and (lower_starts or lower_near)):
         return False
     return (abs(upper_bbox[0] - lower["bbox"][0]) <= X_TOLERANCE
             and abs(upper_bbox[2] - lower["bbox"][2]) <= X_TOLERANCE)

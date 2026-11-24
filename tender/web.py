@@ -136,6 +136,9 @@ def _apply(job_id: str, event: dict) -> None:
             job["company"] = event["company"]
         if event.get("pdf_path"):
             job["pdf_path"] = event["pdf_path"]
+        # 只接受 index 阶段带的 page_texts（索引完才对前端可见），忽略 parse 早期误发
+        if "page_texts" in event and stage_id == "index":
+            job["page_texts"] = event["page_texts"]
 
 
 def _worker(job_id: str, pdf_path: str, company_path: str, use_index: bool = False) -> None:
@@ -161,6 +164,8 @@ def _worker(job_id: str, pdf_path: str, company_path: str, use_index: bool = Fal
         job["sections"] = result["sections"]
         job["missing"] = result["missing"]
         job["page_count"] = result.get("page_count") or len(result["pages"])
+        if result.get("page_texts") is not None:
+            job["page_texts"] = result["page_texts"]
         for key in TABLE_KEYS:
             job["tables"][key] = result[key]
 
@@ -180,6 +185,7 @@ def _launch(job_id: str, file_name: str, company: dict, pdf_path: Path, company_
         "pdf_path": str(pdf_path),
         "company": company,
         "index": None,
+        "page_texts": [],
     }
     with _lock:
         _jobs[job_id] = job
@@ -285,6 +291,19 @@ async def job_pdf(request: Request):
     )
 
 
+async def job_parsed_text(request: Request):
+    """返回索引完成后的按页正文；网页只读这份，不再现场抽 PDF。"""
+    job_id = request.path_params["job_id"]
+    with _lock:
+        job = _jobs.get(job_id)
+        if job is None:
+            return Json({"error": "任务不存在"}, status_code=404)
+        pages = list(job.get("page_texts") or [])
+    if not pages:
+        return Json({"error": "索引尚未完成，解析页文本未就绪"}, status_code=409)
+    return Json({"page_count": len(pages), "pages": pages})
+
+
 async def page_png(request: Request):
     """按页渲 PNG。有 bbox 时在原件上画黄框。"""
     job_id = request.path_params["job_id"]
@@ -384,6 +403,7 @@ app = Starlette(
         Route("/api/check/sample", start_sample, methods=["POST"]),
         Route("/api/jobs/{job_id}", job_state, methods=["GET"]),
         Route("/api/jobs/{job_id}/file", job_pdf, methods=["GET"]),
+        Route("/api/jobs/{job_id}/parsed-text", job_parsed_text, methods=["GET"]),
         Route("/api/jobs/{job_id}/pages/{page:int}", page_png, methods=["GET"]),
         Route("/api/jobs/{job_id}/ask", ask, methods=["POST"]),
         Route("/api/jobs/{job_id}/export.xlsx", export_xlsx, methods=["GET"]),

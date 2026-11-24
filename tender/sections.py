@@ -43,13 +43,18 @@ TYPE_LABEL = {
 #: 匹配顺序：更具体、更「重」的类型在前（一章多类型时主类型取第一个）
 _MATCH_ORDER = ("format", "contract", "score", "qualify", "notice", "demand", "invite")
 
-# 只认行首的章标题，避免「见第四章」「详见第五章」这种正文
+# 只认行首「第X章…」，不认节/部分/篇——「第二节投标人须知正文」会误切成独立章
 _CHAPTER_LINE_RE = re.compile(
-    r"^[\s　]*(第[一二三四五六七八九十百零0-9]+[章节部分篇])"
+    r"^[\s　]*(第[一二三四五六七八九十百零0-9]+章)"
     r"[\s　]*([^\s　].{0,36})$"
 )
 #: 书签里认「第X章」（宽松：允许后面直接跟标题、没有空格）
 _TOC_CHAP_RE = re.compile(r"^第[一二三四五六七八九十百零0-9]{1,4}章\s*\S")
+
+# 检索分库常用类型；qualify 常并入须知，不算硬性缺失
+_KEY_TYPES = ("invite", "notice", "score", "demand", "contract", "format")
+# 正文章数比书签少至少这么多，视为「明显偏少」
+_TOC_CHAPTER_GAP = 2
 
 
 def _norm(text: str) -> str:
@@ -208,21 +213,42 @@ def _sections_from_text(pages: list[dict]) -> list[dict]:
     return sections
 
 
-def _merge_sections(from_toc: list[dict], from_text: list[dict],
-                    last_page: int) -> list[dict]:
-    """书签给骨架，正则补漏。
+def _text_needs_toc(from_text: list[dict], from_toc: list[dict]) -> bool:
+    """正文是否需要书签补洞：关键 type 缺失，或章数明显偏少。"""
+    if not from_toc:
+        return False
+    real = [s for s in from_text if s.get("type") != "unknown"]
+    if not real:
+        return True
+    have: set[str] = set()
+    for sec in real:
+        have.update(types_of(sec))
+    if any(t not in have for t in _KEY_TYPES):
+        return True
+    # 比书签少 _TOC_CHAPTER_GAP 章及以上
+    if len(real) + _TOC_CHAPTER_GAP <= len(from_toc):
+        return True
+    return False
 
-    实测 beijing 的书签只到第五章，没有「第六章 合同文本」「第七章 投标文件格式」，
-    按书签切会把这两章吞进采购需求。所以：正则切出来、书签里没有的类型，按页插进去，
-    再统一重算 end_page——插进来的页号天然落在哪一段，边界就自动对了。
+
+def _merge_sections(from_text: list[dict], from_toc: list[dict],
+                    last_page: int) -> list[dict]:
+    """正文给骨架，书签只补缺。
+
+    书签页码/类型错了会整段带偏；所以默认相信正文。仅当正文关键类型缺失、
+    章数明显偏少、或完全没切开时，才把书签里正文没有的类型按页插进去，
+    再统一重算 end_page。
     """
-    merged = list(from_toc)
+    real = [s for s in from_text if s.get("type") != "unknown"]
+    # 正文完全失败：整份改用书签
+    merged = list(from_toc) if not real else list(real)
     have = {s["type"] for s in merged}
-    for sec in from_text:
-        if sec["type"] in have:
-            continue
-        merged.append(sec)
-        have.add(sec["type"])
+    if real:
+        for sec in from_toc:
+            if sec["type"] in have:
+                continue
+            merged.append(sec)
+            have.add(sec["type"])
     merged.sort(key=lambda s: s["start_page"])
     for i, sec in enumerate(merged):
         end = merged[i + 1]["start_page"] - 1 if i + 1 < len(merged) else last_page
@@ -231,18 +257,18 @@ def _merge_sections(from_toc: list[dict], from_text: list[dict],
 
 
 def split_sections(pages: list[dict], toc: list[dict] | None = None) -> list[dict]:
-    """切章：书签优先，正则补漏。
+    """切章：默认正文；关键 type 缺失或章数明显偏少时，才用书签补。
 
-    书签比正文正则可靠——不受页面排版位置影响，也不怕章标题排在页中间；
-    但书签可能不全（实测 beijing 只到第五章），所以缺的类型由正则补。
+    正文正则不受坏书签误导；书签在「正文漏章 / 章标题排版怪异」时补洞。
     """
     if not pages:
         return []
     from_text = _sections_from_text(pages)
-    if toc:
-        from_toc = _sections_from_toc(pages, toc)
-        if from_toc:
-            return _merge_sections(from_toc, from_text, pages[-1]["page"])
+    if not toc:
+        return from_text
+    from_toc = _sections_from_toc(pages, toc)
+    if from_toc and _text_needs_toc(from_text, from_toc):
+        return _merge_sections(from_text, from_toc, pages[-1]["page"])
     return from_text
 
 

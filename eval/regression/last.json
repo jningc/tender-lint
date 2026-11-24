@@ -1,8 +1,8 @@
 {
   "engine": "v2",
   "repeats": 3,
-  "at": "20261122-215925",
-  "duration_s": 141.6,
+  "at": "20261124-223519",
+  "duration_s": 177.1,
   "docs": [
     {
       "doc": "beijing_road",
@@ -41,7 +41,7 @@
         "covered_pages_median": 0,
         "star_rows_median": 0
       },
-      "rows_median": 60
+      "rows_median": 55
     },
     {
       "doc": "chongzuo_green",
@@ -74,63 +74,62 @@
       "violated": 0,
       "markers": {
         "markers_total": 30,
-        "covered_pages_median": 2,
-        "star_rows_median": 2
+        "covered_pages_median": 1,
+        "star_rows_median": 1
       },
-      "rows_median": 116
+      "rows_median": 76
     },
     {
       "doc": "wenling_video",
       "runs": 3,
       "questions": {
-        "wl-bond": "absent",
+        "wl-bond": "hit",
         "wl-cap": "hit",
-        "wl-neg-perf-bond": "hit",
+        "wl-neg-perf-bond": "violated",
         "wl-perf-bond": "hit",
         "wl-price": "hit",
-        "wl-validity": "hit"
+        "wl-validity": "miss"
       },
       "flaky": [
         "wl-bond",
-        "wl-perf-bond",
-        "wl-validity"
+        "wl-neg-perf-bond"
       ],
       "positive": {
         "hit": 4,
         "total": 5
       },
       "positive_stable": {
-        "hit": 2,
-        "total": 2
+        "hit": 3,
+        "total": 4
       },
       "negative": {
-        "hit": 1,
+        "hit": 0,
         "total": 1
       },
       "negative_stable": {
-        "hit": 1,
-        "total": 1
+        "hit": 0,
+        "total": 0
       },
       "violated": 0,
       "markers": {
         "markers_total": 10,
-        "covered_pages_median": 1,
-        "star_rows_median": 3
+        "covered_pages_median": 2,
+        "star_rows_median": 8
       },
-      "rows_median": 145
+      "rows_median": 77
     }
   ],
   "totals": {
     "pos_hit": 14,
     "pos_total": 18,
-    "pos_stable_hit": 12,
-    "pos_stable_total": 15,
-    "neg_hit": 3,
+    "pos_stable_hit": 13,
+    "pos_stable_total": 17,
+    "neg_hit": 2,
     "neg_total": 3,
-    "neg_stable_hit": 3,
-    "neg_stable_total": 3,
+    "neg_stable_hit": 2,
+    "neg_stable_total": 2,
     "violated": 0,
-    "flaky": 3
+    "flaky": 2
   },
   "markers": {
     "covered_pages": 3
