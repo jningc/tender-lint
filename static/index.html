@@ -45,6 +45,7 @@
   }
   .file-chip b { color: #3370ff; font-weight: 500; }
   .spacer { flex: 1; }
+  header button { white-space: nowrap; }
   button {
     font: inherit;
     border: 1px solid #d0d3d9;
@@ -60,30 +61,81 @@
   button:disabled:hover { border-color: #d0d3d9; color: inherit; background: #fff; }
   button.primary:disabled:hover { background: #3370ff; color: #fff; border-color: #3370ff; }
 
+  /* 八步同一行，圆点由一条线串起来 */
   .steps {
     display: flex;
-    gap: 8px;
-    padding: 10px 20px;
+    flex-wrap: nowrap;
+    align-items: flex-start;
+    gap: 0;
+    padding: 14px 8px 12px;
     background: #fff;
     border-bottom: 1px solid #e5e6eb;
-    flex-wrap: wrap;
   }
   .step {
-    flex: 1;
-    min-width: 170px;
-    border: 1px solid #e5e6eb;
-    border-radius: 6px;
-    padding: 6px 10px;
+    position: relative;
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 18px 4px 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    text-align: center;
     font-size: 12px;
-    background: #fafbfc;
   }
-  .step .name { font-weight: 600; font-size: 13px; }
-  .step .scope { color: #646a73; margin-top: 2px; }
-  .step .state { float: right; font-size: 12px; color: #8f959e; }
-  .step.running { border-color: #3370ff; background: #f0f5ff; }
+  .step::before {
+    content: "";
+    position: absolute;
+    top: 6px;
+    left: 50%;
+    width: calc(100% + 1px);
+    height: 2px;
+    background: #d0d3d9;
+    z-index: 0;
+  }
+  .step:last-child::before { display: none; }
+  .step .dot {
+    position: absolute;
+    top: 2px;
+    left: 50%;
+    width: 10px;
+    height: 10px;
+    margin-left: -5px;
+    border-radius: 50%;
+    background: #fff;
+    border: 2px solid #c9cdd4;
+    box-sizing: border-box;
+    z-index: 1;
+  }
+  .step .name {
+    font-weight: 600;
+    font-size: 13px;
+    line-height: 1.3;
+    white-space: nowrap;
+  }
+  .step .scope {
+    color: #646a73;
+    margin-top: 2px;
+    font-size: 11px;
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .step .state {
+    float: none;
+    margin-top: 2px;
+    font-size: 11px;
+    color: #8f959e;
+  }
+  .step.running .dot { border-color: #3370ff; background: #3370ff; }
+  .step.running .name,
   .step.running .state { color: #3370ff; }
+  .step.done .dot { border-color: #00a870; background: #00a870; }
+  .step.done::before { background: #00a870; }
   .step.done .state { color: #00a870; }
-  .step.error { border-color: #d83931; background: #fff1f0; }
+  .step.error .dot { border-color: #d83931; background: #d83931; }
   .step.error .state { color: #d83931; }
 
   main {
@@ -688,18 +740,41 @@
   }
   nav.toc span { color: var(--muted); font-size: 12px; }
 
-  section.block {
-    margin-top: 28px;
+  /* 六块收成可展开的下拉，默认只露出标题 */
+  details.block {
+    margin-top: 8px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 8px;
     scroll-margin-top: 16px;
   }
   .block-head {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: 10px;
-    margin-bottom: 10px;
-    padding-bottom: 8px;
-    border-bottom: 2px solid var(--rail);
+    margin: 0;
+    padding: 8px 12px;
+    border-bottom: 0;
+    cursor: pointer;
+    list-style: none;
   }
+  details.block > summary.block-head::-webkit-details-marker { display: none; }
+  details.block > summary.block-head::marker { content: ""; }
+  details.block[open] > summary.block-head { border-bottom: 1px solid var(--line); }
+  details.block > summary.block-head::after {
+    content: "";
+    width: 6px;
+    height: 6px;
+    margin-left: 8px;
+    border-right: 1.5px solid var(--muted);
+    border-bottom: 1.5px solid var(--muted);
+    transform: translateY(-2px) rotate(45deg);
+    flex: none;
+  }
+  details.block[open] > summary.block-head::after {
+    transform: translateY(2px) rotate(-135deg);
+  }
+  details.block .block-body { padding: 8px 12px 12px; }
   .block-head .num {
     font-family: "Noto Serif SC", serif;
     font-size: 20px;
@@ -877,6 +952,86 @@
   .c-row .label { font-weight: 600; font-size: 13px; }
   .c-row .val { font-size: 13.5px; }
   .c-row .empty { color: var(--muted); }
+  .c-row .pg { white-space: nowrap; text-align: right; }
+  .c-row .why { color: var(--muted); font-size: 12px; margin-top: 2px; }
+
+  /* 六块各用各的形状，不再共用多列表格 */
+  .bucket { margin-top: 12px; }
+  .bucket h3, .slab {
+    margin: 0 0 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+  }
+  .slab { margin-top: 16px; }
+  .gate, .risk, .mat, .sheet, .score, .tl-item, .durations .chip {
+    cursor: pointer;
+  }
+  .gate.selected, .risk.selected, .mat.selected, .sheet.selected,
+  .score.selected, .tl-item.selected, .durations .chip.selected,
+  .c-row.selected {
+    outline: 2px solid #0b6e4f;
+    outline-offset: -2px;
+  }
+  .gate {
+    padding: 8px 0 8px 12px;
+    border-left: 3px solid var(--line);
+    margin-bottom: 8px;
+  }
+  .gate.bad { border-left-color: var(--danger); }
+  .gate.ok { border-left-color: #027a48; }
+  .gate.warn { border-left-color: var(--warn); }
+  .gate .say, .risk .say {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+  }
+  .gate .txt, .risk .txt { flex: 1; min-width: 0; }
+  .gate .why, .risk .why, .mat .why, .score .std {
+    color: var(--muted);
+    font-size: 12px;
+    margin-top: 2px;
+  }
+  .risk { padding: 7px 0; border-bottom: 1px solid var(--soft); }
+  .mat {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 2px 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--soft);
+  }
+  .mat .st { font-weight: 650; text-align: right; }
+  .mat .st.bad { color: var(--danger); }
+  .mat .st.ok { color: #027a48; }
+  .mat .st.warn { color: var(--warn); }
+  .mat .why { grid-column: 1 / -1; }
+  .sheets { border-top: 1px solid var(--soft); }
+  .sheet {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: baseline;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--soft);
+  }
+  .sheet .nm { font-weight: 600; }
+  .sheet .pg { white-space: nowrap; }
+  .score {
+    display: grid;
+    grid-template-columns: 56px minmax(0, 1fr);
+    gap: 2px 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--soft);
+  }
+  .score .pts {
+    font-family: "Noto Serif SC", serif;
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+  .score .std { grid-column: 2; }
+  .tl-item.selected { background: #f3faf6; }
 
   footer.page-foot {
     margin-top: 40px;
@@ -914,11 +1069,42 @@
     padding: 10px 12px 8px;
     background: linear-gradient(180deg, #f4f7f5 0%, #f7f5f0 100%);
   }
-  .report .hero { padding: 14px 16px; }
-  .report .hero h1 { font-size: 17px; }
-  .report nav.toc { margin: 12px 0 4px; gap: 6px; }
-  .report nav.toc a { padding: 8px 10px; }
-  .report section.block { margin-top: 18px; }
+  .report .hero { padding: 8px 10px; }
+  .report .hero-top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 10px;
+    margin-bottom: 6px;
+    font-size: 12px;
+  }
+  .report .hero-top .deadline { margin-left: 0; font-size: 12px; }
+  .report nav.toc {
+    margin: 0;
+    gap: 2px 8px;
+    grid-template-columns: 1fr 1fr;
+  }
+  .report nav.toc a {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    padding: 3px 2px;
+    background: transparent;
+    border: 0;
+    border-radius: 4px;
+    font-size: 12px;
+    min-width: 0;
+  }
+  .report nav.toc a .nm { color: var(--ink); font-size: 12px; }
+  .report nav.toc a .n { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .report nav.toc a .flag {
+    margin-left: auto;
+    color: var(--danger);
+    font-style: normal;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  .report details.block { margin-top: 8px; }
   .report table { font-size: 12.5px; }
   .report th, .report td { padding: 7px 9px; }
   .report tbody tr { cursor: pointer; }
@@ -937,15 +1123,12 @@
 
 <header>
   <h1>招标文件核对</h1>
-  <div class="file-chip">招标文件：<b id="file-name">未选择</b> <span id="file-meta"></span></div>
-  <div class="file-chip">公司情况：<b id="company-name">company.yaml</b></div>
+  <div class="file-chip">招标文件：<b id="file-name">待选择</b> <span id="file-meta"></span></div>
+  <div class="file-chip">公司情况：<b id="company-name">待选择</b></div>
   <div class="spacer"></div>
-  <button id="btn-pick" type="button">选择 PDF</button>
-  <input id="pdf-file" type="file" accept="application/pdf,.pdf" hidden>
-  <button id="btn-sample" type="button">用东城道路样本</button>
-  <button id="btn-library" type="button">用已有库继续</button>
-  <button id="btn-run" class="primary" type="button">从头开始</button>
-  <button id="btn-export" type="button" disabled>导出 Excel</button>
+  <button type="button" class="btn-case" data-doc="beijing_road">示例监理有限公司</button>
+  <button type="button" class="btn-case" data-doc="chongzuo_green">示例崇左绿林工程有限公司</button>
+  <button type="button" class="btn-case" data-doc="wenling_video">示例温岭视联技术有限公司</button>
 </header>
 
 <details class="yaml-box">
@@ -959,351 +1142,9 @@
   <section class="panel report-side">
     <div class="report-scroll" id="report-scroll">
       <div class="report" id="report">
-        <div class="report-inner" id="report-inner">
-
-    <!-- 结论条：唯一必看 -->
-    <header class="hero">
-      <h1>北京东城道路监理 · 招标文件核对</h1>
-      <div class="meta">beijing_road.pdf · 92 页 · 核对示意 2026-11-22 · 对照 company：示例监理有限公司</div>
-      <div class="stats">
-        <span class="pill"><i class="dot"></i><b>2</b> 项硬伤</span>
-        <span class="pill"><i class="dot"></i><b>1</b> 资格门槛不满足</span>
-        <span class="pill"><i class="dot"></i><b>5</b> 必废风险</span>
-        <span class="pill warn"><i class="dot"></i><b>6</b> 需确认</span>
-        <span class="deadline"><em>投标截止</em>2026-08-18 09:00</span>
+        <div class="empty">尚未选择招标文件，也还没有开始分析。</div>
       </div>
-    </header>
-
-    <nav class="toc" aria-label="六块导航">
-      <a href="#s1"><strong>① 能不能投</strong><span>资格门槛 4 条</span></a>
-      <a href="#s2"><strong>② 会不会废</strong><span>无效情形 · 分档</span></a>
-      <a href="#s3"><strong>③ 交什么</strong><span>材料 8 项</span></a>
-      <a href="#s4"><strong>④ 得多少分</strong><span>30 + 商 10 + 技 60</span></a>
-      <a href="#s5"><strong>⑤ 什么时候</strong><span>时点 + 时长</span></a>
-      <a href="#s6"><strong>⑥ 中标后</strong><span>合同 5 项三态</span></a>
-    </nav>
-
-    <!-- ① -->
-    <section class="block" id="s1">
-      <div class="block-head">
-        <span class="num">①</span>
-        <h2>能不能投 · 资格门槛</h2>
-        <span class="hint">对照「你是谁」· company.yaml</span>
-      </div>
-      <table>
-        <thead>
-          <tr><th style="width:42%">门槛</th><th>页</th><th>判定</th><th>依据</th></tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>具备市政公用工程监理资质</td>
-            <td><span class="ref" data-page="23">p23 资格句</span></td>
-            <td><span class="tag ok">满足</span></td>
-            <td>市政公用工程监理乙级（有效期至 2028-03-01）</td>
-          </tr>
-          <tr class="bad">
-            <td>拟派总监理工程师具备市政公用工程专业注册监理工程师资格</td>
-            <td><span class="ref" data-page="25">p25 资格句</span></td>
-            <td><span class="tag fail">不满足</span></td>
-            <td>公司登记专业为房屋建筑工程（张某）</td>
-          </tr>
-          <tr>
-            <td>本项目不接受联合体投标</td>
-            <td><span class="ref" data-page="4">p4 资格句</span></td>
-            <td><span class="tag ok">满足</span></td>
-            <td>joint_venture: false</td>
-          </tr>
-          <tr>
-            <td>具备独立承担民事责任能力的法人或其他组织</td>
-            <td><span class="ref" data-page="4">p4 资格句</span></td>
-            <td><span class="tag pending">待确认</span></td>
-            <td>company.yaml 未单独字段，需人工核营业执照</td>
-          </tr>
-        </tbody>
-      </table>
-    </section>
-
-    <!-- ② -->
-    <section class="block" id="s2">
-      <div class="block-head">
-        <span class="num">②</span>
-        <h2>会不会废 · 无效情形</h2>
-        <span class="hint">情形须为条件句 · 页码带 role</span>
-      </div>
-      <table>
-        <thead>
-          <tr><th>档</th><th style="width:36%">情形</th><th>后果</th><th>出处</th></tr>
-        </thead>
-        <tbody>
-          <tr class="bad">
-            <td><span class="tag must">必废</span></td>
-            <td>
-              若未按招标文件要求提交投标保证金
-              <details class="quote"><summary>展开原文</summary><p>投标人未按照招标文件要求提交投标保证金的，其投标无效。</p></details>
-            </td>
-            <td>投标无效</td>
-            <td><span class="ref" data-page="17">p17 无效句</span></td>
-          </tr>
-          <tr class="bad">
-            <td><span class="tag must">必废</span></td>
-            <td>
-              若投标有效期不足招标文件规定期限
-              <details class="quote"><summary>展开原文</summary><p>投标有效期少于招标文件规定期限的，其投标无效。</p></details>
-            </td>
-            <td>投标无效</td>
-            <td><span class="ref" data-page="8">p8 无效句</span></td>
-          </tr>
-          <tr class="bad">
-            <td><span class="tag must">必废</span></td>
-            <td>若报价超过最高限价</td>
-            <td>投标无效</td>
-            <td><span class="ref" data-page="8">p8 无效句</span></td>
-          </tr>
-          <tr class="bad">
-            <td><span class="tag must">必废</span></td>
-            <td>若未在规定期限内获取招标文件</td>
-            <td>不得参加</td>
-            <td><span class="ref" data-page="5">p5 资格句</span></td>
-          </tr>
-          <tr class="bad">
-            <td><span class="tag must">必废</span></td>
-            <td>若提供有选择性或可调整的报价</td>
-            <td>投标无效</td>
-            <td><span class="ref" data-page="15">p15 无效句</span></td>
-          </tr>
-          <tr class="warn">
-            <td><span class="tag check">需确认</span></td>
-            <td>若未按格式要求签署、盖章（原文带「视情形」条件）</td>
-            <td>投标无效</td>
-            <td><span class="ref" data-page="19">p19 无效句</span></td>
-          </tr>
-          <tr class="warn">
-            <td><span class="tag check">需确认</span></td>
-            <td>须提交分项报价表（只写「应」，未见明确后果）</td>
-            <td>—</td>
-            <td><span class="ref" data-page="18">p18 期限</span></td>
-          </tr>
-          <tr>
-            <td><span class="tag other">非投标人</span></td>
-            <td>若投标人不足 3 家</td>
-            <td>不予开标</td>
-            <td><span class="ref" data-page="26">p26 程序句</span></td>
-          </tr>
-        </tbody>
-      </table>
-    </section>
-
-    <!-- ③ -->
-    <section class="block" id="s3">
-      <div class="block-head">
-        <span class="num">③</span>
-        <h2>交什么 · 材料</h2>
-        <span class="hint">有 / 缺 · 已判过写「见 ②」</span>
-      </div>
-      <table>
-        <thead>
-          <tr><th>名称</th><th>类型</th><th>状态</th><th>页</th><th>备注</th></tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>营业执照</td>
-            <td>附证明</td>
-            <td><span class="tag pending">待确认</span></td>
-            <td><span class="ref" data-page="70">p70 格式</span></td>
-            <td>—</td>
-          </tr>
-          <tr>
-            <td>资质证书</td>
-            <td>附证明</td>
-            <td><span class="tag ok">有</span></td>
-            <td><span class="ref" data-page="23">p23 资格句</span></td>
-            <td>市政公用工程监理乙级</td>
-          </tr>
-          <tr>
-            <td>总监理工程师任命书</td>
-            <td>附证明</td>
-            <td><span class="tag fail">缺</span></td>
-            <td><span class="ref" data-page="25">p25 资格句</span></td>
-            <td>appointment_letter: false；专业不符见 ①</td>
-          </tr>
-          <tr>
-            <td>投标保证金凭证</td>
-            <td>附证明</td>
-            <td><span class="tag fail">缺</span></td>
-            <td><span class="ref" data-page="8">p8 金额</span></td>
-            <td>见 ②第 1 条；deposit_ready: false</td>
-          </tr>
-          <tr>
-            <td>体系认证证书</td>
-            <td>附证明</td>
-            <td><span class="tag ok">有</span></td>
-            <td><span class="ref" data-page="34">p34 公式</span></td>
-            <td>质量 / 环境体系</td>
-          </tr>
-          <tr>
-            <td>信用记录</td>
-            <td>代查</td>
-            <td><span class="tag neutral">代理机构查</span></td>
-            <td><span class="ref" data-page="7">p7 程序句</span></td>
-            <td>无须投标人附原件</td>
-          </tr>
-          <tr>
-            <td>声明函</td>
-            <td>需填表</td>
-            <td><span class="tag pending">待确认</span></td>
-            <td><span class="ref" data-page="72">p72 格式</span></td>
-            <td>—</td>
-          </tr>
-          <tr>
-            <td>格式章空表（投标函、开标一览、偏离表等）</td>
-            <td>需填表</td>
-            <td><span class="tag neutral">—</span></td>
-            <td><span class="ref" data-page="70">p70–92 格式</span></td>
-            <td>不占清单主体；点进原文看模板</td>
-          </tr>
-        </tbody>
-      </table>
-    </section>
-
-    <!-- ④ -->
-    <section class="block" id="s4">
-      <div class="block-head">
-        <span class="num">④</span>
-        <h2>得多少分 · 评分</h2>
-        <span class="hint">分项分 · 合计不进单项 · 主观不预估</span>
-      </div>
-      <div class="score-sum">
-        <span class="chip"><em>满分</em>100</span>
-        <span class="chip"><em>价格</em>30</span>
-        <span class="chip"><em>商务</em>10</span>
-        <span class="chip"><em>技术</em>60</span>
-      </div>
-      <table>
-        <thead>
-          <tr><th>分类</th><th>评分项</th><th>分值</th><th>性质</th><th>标准摘要</th><th>出处</th></tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>价格</td>
-            <td>投标报价</td>
-            <td>30</td>
-            <td><span class="tag ok">客观</span></td>
-            <td>得分 = 评标基准价 / 投标报价 × 价格权值（示意）</td>
-            <td><span class="ref" data-page="33">p33 公式</span></td>
-          </tr>
-          <tr>
-            <td>商务</td>
-            <td>类似项目业绩</td>
-            <td>4</td>
-            <td><span class="tag ok">客观</span></td>
-            <td>近三年每个 2 分，满分 4 分</td>
-            <td><span class="ref" data-page="33">p33</span></td>
-          </tr>
-          <tr>
-            <td>商务</td>
-            <td>总监理工程师类似业绩</td>
-            <td>3</td>
-            <td><span class="tag ok">客观</span></td>
-            <td>1 个以上（含）3 分，没有业绩不得分</td>
-            <td><span class="ref" data-page="33">p33</span></td>
-          </tr>
-          <tr>
-            <td>商务</td>
-            <td>体系认证</td>
-            <td>3</td>
-            <td><span class="tag ok">客观</span></td>
-            <td>有一个得 1 分，满分 3 分</td>
-            <td><span class="ref" data-page="33">p33</span></td>
-          </tr>
-          <tr>
-            <td>技术</td>
-            <td>监理大纲完整性与针对性</td>
-            <td>12</td>
-            <td><span class="tag pending">主观</span></td>
-            <td>不预估</td>
-            <td><span class="ref" data-page="34">p34</span></td>
-          </tr>
-          <tr>
-            <td>技术</td>
-            <td>质量控制措施</td>
-            <td>8</td>
-            <td><span class="tag pending">主观</span></td>
-            <td>不预估</td>
-            <td><span class="ref" data-page="34">p34</span></td>
-          </tr>
-        </tbody>
-      </table>
-    </section>
-
-    <!-- ⑤ -->
-    <section class="block" id="s5">
-      <div class="block-head">
-        <span class="num">⑤</span>
-        <h2>什么时候 · 时间</h2>
-        <span class="hint">轴上只放时点 · 时长在下</span>
-      </div>
-      <div class="timeline">
-        <div class="tl-item">
-          <div class="when">2026-08-08</div>
-          <div class="what">获取招标文件截止 · <span class="ref" data-page="5">p5 期限</span></div>
-        </div>
-        <div class="tl-item">
-          <div class="when">2026-08-18 09:00</div>
-          <div class="what">投标截止 = 开标 · <span class="ref" data-page="5">p5 期限</span></div>
-        </div>
-        <div class="tl-item">
-          <div class="when">开标后</div>
-          <div class="what">电子标解密窗口 · <span class="ref" data-page="8">p8 期限</span></div>
-        </div>
-      </div>
-      <div class="durations">
-        <div class="chip">有效期 <b>90 日历天</b> · <span class="ref" data-page="8">p8 期限</span>（若不足见 ②）</div>
-        <div class="chip">解密 <b>30 分钟</b> · <span class="ref" data-page="8">p8 期限</span></div>
-        <div class="chip">质疑期限 <b>7 个工作日</b> · <span class="ref" data-page="21">p21 期限</span></div>
-        <div class="chip">询问答复 <b>3 个工作日</b> · <span class="ref" data-page="21">p21 期限</span></div>
-      </div>
-    </section>
-
-    <!-- ⑥ -->
-    <section class="block" id="s6">
-      <div class="block-head">
-        <span class="num">⑥</span>
-        <h2>中标后 · 合同要点</h2>
-        <span class="hint">有值 / 原文未写明 / 待人工 · 履约保证金留在此</span>
-      </div>
-      <div class="contract-grid">
-        <div class="c-row">
-          <div class="label">付款</div>
-          <div class="val">按工程进度分期支付（示意摘录）</div>
-          <span class="tag ok">有值</span>
-        </div>
-        <div class="c-row">
-          <div class="label">履约保证金</div>
-          <div class="val">中标金额的一定比例；具体以合同文本为准 · <span class="ref" data-page="50">p50</span></div>
-          <span class="tag ok">有值</span>
-        </div>
-        <div class="c-row">
-          <div class="label">服务期或工期</div>
-          <div class="val empty">抽到表述但缺可核对数字抓手</div>
-          <span class="tag pending">待人工</span>
-        </div>
-        <div class="c-row">
-          <div class="label">违约</div>
-          <div class="val">双方违约责任条款见合同文本 · <span class="ref" data-page="55">p55</span></div>
-          <span class="tag ok">有值</span>
-        </div>
-        <div class="c-row">
-          <div class="label">验收</div>
-          <div class="val empty">本示意未在合同章定位到独立验收专条</div>
-          <span class="tag neutral">原文未写明</span>
-        </div>
-      </div>
-    </section>
-
-
-        </div><!-- report-inner -->
-      </div><!-- report -->
-    </div><!-- report-scroll -->
+    </div>
   </section>
 
   <div class="split-bar" id="split-bar" role="separator" aria-orientation="vertical" title="拖动调节左右宽度"></div>
@@ -1398,18 +1239,18 @@ if (window.pdfjsLib) {
   pdfjsLib.GlobalWorkerOptions.workerSrc = "/vendor/pdf.worker.min.js";
 }
 const TAB_DEFS = [
-  { key: "fq", title: "能不能投", table: "feibiao",
+  { key: "fq", title: "资格检查", table: "feibiao",
     /* 后端 kind 为「资格」；示意文案里写作「资格门槛」 */
     filter: function (r) { return r.kind === "资格" || r.kind === "资格门槛"; },
     cols: ["档", "资格门槛", "出处", "公司情况", "结论"],
     cells: function (r) { return [tierText(r.tier), r.condition, null, r.company, null]; } },
-  { key: "fb", title: "会不会废", table: "feibiao",
+  { key: "fb", title: "废标检查", table: "feibiao",
     filter: function (r) { return r.kind !== "资格" && r.kind !== "资格门槛"; },
     cols: ["档", "情形", "出处", "公司情况", "结论"],
     cells: function (r) { return [tierText(r.tier), r.condition, null, r.company, null]; } },
-  { key: "pf", title: "得多少分", table: "pingfen", cols: ["评分项", "分值", "性质", "评分标准", "出处", "公司材料", "预估"],
+  { key: "pf", title: "评分标准", table: "pingfen", cols: ["评分项", "分值", "性质", "评分标准", "出处", "公司材料", "预估"],
     cells: function (r) { return [r.item, r.score, r.nature || "", r.standard, null, r.company, r.estimate]; } },
-  { key: "cl", title: "材料对照", table: "cailiao", cols: ["须提交材料", "出处", "公司情况", "结论"],
+  { key: "cl", title: "提交材料", table: "cailiao", cols: ["须提交材料", "出处", "公司情况", "结论"],
     cells: function (r) { return [r.material, null, r.company, null]; } },
   { key: "kw", title: "空位对照", table: "kongwei", cols: ["所在表格", "要填的内容", "注意", "出处"],
     cells: function (r) { return [r.form, r.field, r.note, null]; } },
@@ -1438,6 +1279,7 @@ TAB_DEFS.forEach(function (def) {
 });
 
 let jobId = null;
+let jobStatus = "";
 let pollTimer = null;
 let tableSig = "";
 let currentTab = "fb";
@@ -1518,8 +1360,9 @@ function renderSteps(stages) {
     const state = stage.state || "wait";
     const label = state === "done" ? "完成" : state === "running" ? "进行中" : state === "error" ? "失败" : "等待";
     box.appendChild(el("div", { class: "step " + state },
-      '<span class="state">' + label + "</span><div class=\"name\">" + esc(stage.name) +
-      '</div><div class="scope">' + esc(stage.detail || stage.scope) + "</div>"));
+      '<span class="dot"></span><div class="name">' + esc(stage.name) +
+      '</div><div class="scope">' + esc(stage.detail || stage.scope) +
+      '</div><div class="state">' + label + "</div>"));
   });
 }
 
@@ -1579,18 +1422,23 @@ function bindReportClicks() {
   if (!root || root.dataset.bound === "1") return;
   root.dataset.bound = "1";
   root.addEventListener("click", function (event) {
-    const tr = event.target.closest("tr[data-key]");
+    const jump = event.target.closest("a[href^='#s']");
+    if (jump) {
+      const box = document.getElementById(jump.getAttribute("href").slice(1));
+      if (box && box.tagName === "DETAILS") box.open = true;
+    }
+    const tr = event.target.closest(".hit[data-key], tr[data-key]");
     if (tr) {
       const key = tr.getAttribute("data-key");
       selectedKey = key;
       shownSig = "";
-      root.querySelectorAll("tr.selected").forEach(function (n) { n.classList.remove("selected"); });
+      root.querySelectorAll(".selected").forEach(function (n) { n.classList.remove("selected"); });
       tr.classList.add("selected");
       const parts = key.split(":");
       const row = DATA[parts[0]] && DATA[parts[0]].rows[Number(parts[1])];
       if (row) {
-        const label = (row.star ? "★ " : "") + (row.cells[1] || row.cells[0] || "");
-        showRefs(row.refs, label, row.status);
+        const label = tr.getAttribute("data-label") || ((row.star ? "★ " : "") + (row.cells[1] || row.cells[0] || ""));
+        showRefs(mergedRefs(tr, parts[0], row), label, row.status);
       }
       return;
     }
@@ -1611,12 +1459,16 @@ function bindReportClicks() {
   });
 }
 
+function tocLink(href, name, count, flag) {
+  return '<a href="' + href + '"><span class="nm">' + name + '</span><b class="n">' + count +
+    "</b>" + (flag ? '<em class="flag">' + flag + "</em>" : "") + "</a>";
+}
+
 function buildHero() {
-  /* 从已映射的 DATA 汇总结论条，避免依赖原始 RAW */
+  /* 页眉已有文件名、页数、公司。这里只留截止、需确认，以及六块导航和条数 */
   const fb = (DATA.fb && DATA.fb.rows) || [];
   const fq = (DATA.fq && DATA.fq.rows) || [];
   const all = fb.concat(fq);
-  /* 后端档名多为「废标/资格」；示意稿用「必废/需确认」——两边都认 */
   const must = all.filter(function (r) {
     return r.tier === "必废" || (r.kind === "废标" && r.status === "bad");
   });
@@ -1626,38 +1478,315 @@ function buildHero() {
   const confirm = all.filter(function (r) {
     return r.tier === "需确认" || r.status === "check";
   });
-  const hard = qualifyFail.length + must.filter(function (r) {
-    return r.kind !== "资格" && r.kind !== "资格门槛";
-  }).length;
   const sj = (DATA.sj && DATA.sj.rows) || [];
+  const cl = (DATA.cl && DATA.cl.rows) || [];
+  const pf = (DATA.pf && DATA.pf.rows) || [];
+  const ht = (DATA.ht && DATA.ht.rows) || [];
   const dlRow = sj.find(function (r) { return (r.cells[0] || "").indexOf("截止") >= 0; });
   const dl = dlRow ? dlRow.cells[1] : "";
-  const file = (document.getElementById("file-name") || {}).textContent || "未选择";
-  const company = (document.getElementById("company-name") || {}).textContent || "company.yaml";
-  const meta = (document.getElementById("file-meta") || {}).textContent || "";
+  const top = [];
+  if (dl) top.push('<span class="deadline">截止 ' + esc(dl) + "</span>");
+  if (confirm.length) top.push('<span class="pill warn"><b>' + confirm.length + "</b> 需确认</span>");
   return (
     '<header class="hero">' +
-      "<h1>" + esc(file) + " · 招标文件核对</h1>" +
-      '<div class="meta">' + esc(meta.replace(/^·\s*/, "")) +
-        (meta ? " · " : "") + "对照 company：" + esc(company) + "</div>" +
-      '<div class="stats">' +
-        '<span class="pill"><i class="dot"></i><b>' + hard + "</b> 项硬伤</span>" +
-        '<span class="pill"><i class="dot"></i><b>' + qualifyFail.length + "</b> 资格门槛不满足</span>" +
-        '<span class="pill"><i class="dot"></i><b>' + must.length + "</b> 必废风险</span>" +
-        '<span class="pill warn"><i class="dot"></i><b>' + confirm.length + "</b> 需确认</span>" +
-        (dl ? '<span class="deadline"><em>投标截止</em>' + esc(dl) + "</span>" : "") +
-      "</div></header>"
+      (top.length ? '<div class="hero-top">' + top.join("") + "</div>" : "") +
+      '<nav class="toc">' +
+        tocLink("#s1", "资格检查", fq.length, qualifyFail.length ? "不满足 " + qualifyFail.length : "") +
+        tocLink("#s2", "废标检查", fb.length, must.length ? "必废 " + must.length : "") +
+        tocLink("#s3", "提交材料", cl.length, "") +
+        tocLink("#s4", "评分标准", pf.length, "") +
+        tocLink("#s5", "时间节点", sj.length, "") +
+        tocLink("#s6", "合同要点", ht.length, "") +
+      "</nav></header>"
   );
 }
 
-function sectionHead(num, title, hint) {
-  return '<div class="block-head"><span class="num">' + num + "</span><h2>" + title +
-    '</h2><span class="hint">' + hint + "</span></div>";
+function sectionBlock(id, num, title, hint, body) {
+  return '<details class="block" id="' + id + '">' +
+    '<summary class="block-head"><span class="num">' + num + "</span><h2>" + title +
+    '</h2><span class="hint">' + hint + "</span></summary>" +
+    '<div class="block-body">' + body + "</div></details>";
 }
 
 function tableOpen(headers) {
   return "<table><thead><tr>" + headers.map(function (h) { return "<th>" + h + "</th>"; }).join("") +
     "</tr></thead><tbody>";
+}
+
+function railClass(row) {
+  if (row.status === "bad" || row.tier === "必废" || row.tier === "废标") return "bad";
+  if (row.status === "ok") return "ok";
+  if (row.status === "check" || row.tier === "需确认") return "warn";
+  return "";
+}
+
+function statusWord(status) {
+  if (status === "bad") return "不满足";
+  if (status === "ok") return "满足";
+  if (status === "check") return "待确认";
+  if (status === "info") return "无须提供";
+  return "未判定";
+}
+
+function materialWord(status) {
+  if (status === "bad") return "缺";
+  if (status === "ok") return "有";
+  if (status === "check") return "待确认";
+  if (status === "info") return "无须提供";
+  return "待确认";
+}
+
+function starHtml(row) {
+  return row.star ? '<span class="star">★</span>' : "";
+}
+
+function selClass(key) {
+  return key === selectedKey ? " selected" : "";
+}
+
+/* 同一张表的多个空位合成一条，只留表名和页码 */
+function groupForms(rows) {
+  const groups = [];
+  const byName = {};
+  rows.forEach(function (row, index) {
+    const name = (row.cells[0] || "").replace(/\s+/g, " ").trim();
+    if (!name) return;
+    if (!byName[name]) {
+      byName[name] = { name: name, indexes: [], refs: [] };
+      groups.push(byName[name]);
+    }
+    const group = byName[name];
+    group.indexes.push(index);
+    (row.refs || []).forEach(function (ref) {
+      const id = String(ref.page == null ? "" : ref.page);
+      if (!id || group.refs.some(function (old) { return String(old.page) === id; })) return;
+      group.refs.push(ref);
+    });
+  });
+  return groups;
+}
+
+function pageOnly(refs) {
+  if (!refs || !refs.length) return '<span class="muted">无页码</span>';
+  return refs.map(function (ref) {
+    return '<span class="ref" data-page="' + esc(ref.page) + '">p' + esc(ref.page) + "</span>";
+  }).join(" ");
+}
+
+function mergedRefs(el, tableKey, row) {
+  const merge = el.getAttribute("data-merge");
+  if (!merge) return row.refs;
+  const refs = [];
+  const seen = {};
+  merge.split(",").forEach(function (index) {
+    const item = DATA[tableKey] && DATA[tableKey].rows[Number(index)];
+    (item && item.refs || []).forEach(function (ref) {
+      const id = String(ref.page == null ? "" : ref.page);
+      if (!id || seen[id]) return;
+      seen[id] = true;
+      refs.push(ref);
+    });
+  });
+  return refs.length ? refs : row.refs;
+}
+
+function formSelected(indexes) {
+  if (!selectedKey || selectedKey.indexOf("kw:") !== 0) return "";
+  const index = Number(selectedKey.split(":")[1]);
+  return indexes.indexOf(index) >= 0 ? " selected" : "";
+}
+
+function isDuration(when) {
+  const text = when || "";
+  if (/\d{4}/.test(text)) return false;
+  return /天|分钟|小时|工作日|个月/.test(text);
+}
+
+function scoreNumber(text) {
+  const matched = String(text || "").match(/-?\d+(?:\.\d+)?/);
+  return matched ? Number(matched[0]) : null;
+}
+
+function renderGates(rows) {
+  if (!rows.length) return '<p class="muted">暂无数据</p>';
+  const order = ["bad", "check", "ok", "info", ""];
+  let html = "";
+  order.forEach(function (status) {
+    const list = [];
+    rows.forEach(function (row, index) {
+      if ((row.status || "") === status) list.push([row, index]);
+    });
+    if (!list.length) return;
+    html += '<div class="bucket"><h3>' + statusWord(status) + " · " + list.length + "</h3>";
+    list.forEach(function (pair) {
+      const row = pair[0];
+      const key = "fq:" + pair[1];
+      html += '<div class="gate hit ' + railClass(row) + selClass(key) + '" data-key="' + key + '">' +
+        '<div class="say"><div class="txt">' + starHtml(row) + esc(row.cells[1] || "") + "</div>" +
+        '<div class="pg">' + refCell(row.refs) + "</div></div>" +
+        (row.cells[3] ? '<div class="why">' + esc(row.cells[3]) + "</div>" : "") +
+        "</div>";
+    });
+    html += "</div>";
+  });
+  return html;
+}
+
+function renderRisks(rows) {
+  if (!rows.length) return '<p class="muted">暂无数据</p>';
+  const prefer = ["必废", "废标", "需确认", "资格", "非投标人", "其他"];
+  const buckets = {};
+  const seen = [];
+  rows.forEach(function (row, index) {
+    const name = row.tier || "其他";
+    if (!buckets[name]) {
+      buckets[name] = [];
+      seen.push(name);
+    }
+    buckets[name].push([row, index]);
+  });
+  seen.sort(function (a, b) {
+    const ia = prefer.indexOf(a);
+    const ib = prefer.indexOf(b);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+  let html = "";
+  seen.forEach(function (name) {
+    const list = buckets[name];
+    html += '<div class="bucket"><h3>' + esc(name) + " · " + list.length + "</h3>";
+    list.forEach(function (pair) {
+      const row = pair[0];
+      const key = "fb:" + pair[1];
+      html += '<div class="risk hit ' + railClass(row) + selClass(key) + '" data-key="' + key + '">' +
+        '<div class="say"><div class="txt">' + starHtml(row) + esc(row.cells[1] || "") + "</div>" +
+        '<div class="pg">' + refCell(row.refs) + "</div></div>" +
+        (row.cells[3] ? '<div class="why">' + esc(row.cells[3]) + "</div>" : "") +
+        "</div>";
+    });
+    html += "</div>";
+  });
+  return html;
+}
+
+function renderMaterials(rows) {
+  if (!rows.length) return "";
+  let html = '<h3 class="slab">要交的材料</h3>';
+  rows.forEach(function (row, index) {
+    const key = "cl:" + index;
+    const word = materialWord(row.status);
+    html += '<div class="mat hit ' + railClass(row) + selClass(key) + '" data-key="' + key + '">' +
+      "<div>" + esc(row.cells[0] || "") + " " + refCell(row.refs) + "</div>" +
+      '<div class="st ' + railClass(row) + '">' + word + "</div>" +
+      (row.cells[2] ? '<div class="why">' + esc(row.cells[2]) + "</div>" : "") +
+      "</div>";
+  });
+  return html;
+}
+
+function renderSheets(rows) {
+  const groups = groupForms(rows);
+  if (!groups.length) return "";
+  let html = '<h3 class="slab">要填的表</h3><div class="sheets">';
+  groups.forEach(function (group) {
+    const key = "kw:" + group.indexes[0];
+    html += '<div class="sheet hit' + formSelected(group.indexes) + '" data-key="' + key +
+      '" data-merge="' + group.indexes.join(",") + '" data-label="' + esc(group.name) + '">' +
+      '<span class="nm">' + esc(group.name) + "</span>" +
+      '<span class="pg">' + pageOnly(group.refs) + "</span></div>";
+  });
+  return html + "</div>";
+}
+
+function renderScores(rows) {
+  if (!rows.length) return '<p class="muted">暂无数据</p>';
+  let sum = 0;
+  let objective = 0;
+  let subjective = 0;
+  rows.forEach(function (row) {
+    const value = scoreNumber(row.cells[1]);
+    if (value != null) sum += value;
+    if ((row.cells[2] || "").indexOf("主观") >= 0) subjective += 1;
+    else if (row.cells[2]) objective += 1;
+  });
+  let html = '<div class="score-sum">';
+  if (sum) html += '<span class="chip"><em>分项合计</em>' + sum + "</span>";
+  if (objective) html += '<span class="chip"><em>客观</em>' + objective + " 项</span>";
+  if (subjective) html += '<span class="chip"><em>主观</em>' + subjective + " 项</span>";
+  html += "</div>";
+  rows.forEach(function (row, index) {
+    const key = "pf:" + index;
+    const nature = row.cells[2] || "";
+    const natureTag = nature.indexOf("主观") >= 0
+      ? '<span class="tag pending">主观</span>'
+      : (nature ? '<span class="tag ok">' + esc(nature) + "</span>" : "");
+    const extra = [];
+    if (row.cells[6]) extra.push("预估 " + row.cells[6]);
+    if (row.cells[5]) extra.push(row.cells[5]);
+    html += '<div class="score hit' + selClass(key) + '" data-key="' + key + '">' +
+      '<div class="pts">' + esc(row.cells[1] || "—") + "</div>" +
+      "<div>" + esc(row.cells[0] || "") + " " + natureTag + " " + refCell(row.refs) + "</div>" +
+      (row.cells[3] ? '<div class="std">' + esc(row.cells[3]) + "</div>" : "") +
+      (extra.length ? '<div class="std">' + esc(extra.join(" · ")) + "</div>" : "") +
+      "</div>";
+  });
+  return html;
+}
+
+function renderTimes(rows) {
+  if (!rows.length) return '<p class="muted">暂无数据</p>';
+  const points = [];
+  const durations = [];
+  rows.forEach(function (row, index) {
+    if (isDuration(row.cells[1])) durations.push([row, index]);
+    else points.push([row, index]);
+  });
+  let html = "";
+  if (points.length) {
+    html += '<div class="timeline">';
+    points.forEach(function (pair) {
+      const row = pair[0];
+      const key = "sj:" + pair[1];
+      html += '<div class="tl-item hit' + selClass(key) + '" data-key="' + key + '">' +
+        '<div class="when">' + esc(row.cells[1] || row.cells[0] || "") + "</div>" +
+        '<div class="what">' + esc(row.cells[0] || "") +
+        (row.cells[2] ? " · " + esc(row.cells[2]) : "") +
+        " · " + refCell(row.refs) + "</div></div>";
+    });
+    html += "</div>";
+  }
+  if (durations.length) {
+    html += '<div class="durations">';
+    durations.forEach(function (pair) {
+      const row = pair[0];
+      const key = "sj:" + pair[1];
+      html += '<div class="chip hit' + selClass(key) + '" data-key="' + key + '">' +
+        esc(row.cells[0] || "") + " <b>" + esc(row.cells[1] || "") + "</b> · " +
+        refCell(row.refs) +
+        (row.cells[2] ? " · " + esc(row.cells[2]) : "") +
+        "</div>";
+    });
+    html += "</div>";
+  }
+  return html;
+}
+
+function renderContracts(rows) {
+  if (!rows.length) return '<div class="c-row"><div class="label">—</div><div class="val empty">暂无数据</div></div>';
+  let html = "";
+  rows.forEach(function (row, index) {
+    const key = "ht:" + index;
+    const st = row.status === "check" ? '<span class="tag pending">待人工</span>'
+      : row.status === "ok" ? '<span class="tag ok">有值</span>'
+      : row.status === "info" ? '<span class="tag neutral">原文未写明</span>'
+      : "";
+    html += '<div class="c-row hit' + selClass(key) + '" data-key="' + key + '">' +
+      '<div class="label">' + esc(row.cells[0] || "") + "</div>" +
+      '<div class="val">' + esc(row.cells[1] || "") +
+      (row.cells[2] ? '<div class="why">' + esc(row.cells[2]) + "</div>" : "") +
+      "</div>" +
+      '<div class="pg">' + refCell(row.refs) + (st ? "<div>" + st + "</div>" : "") + "</div></div>";
+  });
+  return html;
 }
 
 function renderReportFromData() {
@@ -1671,121 +1800,35 @@ function renderReportFromData() {
 
   let html = '<div class="report-inner">';
   html += buildHero();
-  html += '<nav class="toc">' +
-    '<a href="#s1"><strong>① 能不能投</strong><span>资格门槛 ' + fq.length + " 条</span></a>" +
-    '<a href="#s2"><strong>② 会不会废</strong><span>无效情形 ' + fb.length + " 条</span></a>" +
-    '<a href="#s3"><strong>③ 交什么</strong><span>材料 ' + cl.length + " 项</span></a>" +
-    '<a href="#s4"><strong>④ 得多少分</strong><span>评分 ' + pf.length + " 项</span></a>" +
-    '<a href="#s5"><strong>⑤ 什么时候</strong><span>时间 ' + sj.length + " 条</span></a>" +
-    '<a href="#s6"><strong>⑥ 中标后</strong><span>合同 ' + ht.length + " 项</span></a>" +
-    "</nav>";
 
-  html += '<section class="block" id="s1">' + sectionHead("①", "能不能投 · 资格门槛", "对照「你是谁」· company.yaml");
-  html += tableOpen(["门槛", "出处", "判定", "依据"]);
-  if (!fq.length) html += '<tr><td colspan="4" class="muted">暂无数据</td></tr>';
-  fq.forEach(function (row, i) {
-    const key = "fq:" + i;
-    const verdict = row.status === "bad" ? "不满足" : row.status === "ok" ? "满足" : row.status === "check" ? "待确认" : "";
-    html += '<tr data-key="' + key + '" class="' + rowClass(row) + (key === selectedKey ? " selected" : "") + '">' +
-      "<td>" + (row.star ? '<span class="star">★</span>' : "") + row.cells[1] + "</td>" +
-      "<td>" + refCell(row.refs) + "</td>" +
-      "<td>" + statusToTag(row.status, verdict) + "</td>" +
-      "<td>" + esc(row.cells[3] || "") + "</td></tr>";
-  });
-  html += "</tbody></table></section>";
-
-  html += '<section class="block" id="s2">' + sectionHead("②", "会不会废 · 无效情形", "情形分档 · 页码带 role");
-  html += tableOpen(["档", "情形", "出处", "公司情况", "结论"]);
-  if (!fb.length) html += '<tr><td colspan="5" class="muted">暂无数据</td></tr>';
-  fb.forEach(function (row, i) {
-    const key = "fb:" + i;
-    html += '<tr data-key="' + key + '" class="' + rowClass(row) + (key === selectedKey ? " selected" : "") + '">' +
-      "<td>" + (row.cells[0] || tierTag(row.tier)) + "</td>" +
-      "<td>" + (row.star ? '<span class="star">★</span>' : "") + esc(row.cells[1] || "") + "</td>" +
-      "<td>" + refCell(row.refs) + "</td>" +
-      "<td>" + esc(row.cells[3] || "") + "</td>" +
-      "<td>" + tagHtml(row.status) + "</td></tr>";
-  });
-  html += "</tbody></table></section>";
-
-  html += '<section class="block" id="s3">' + sectionHead("③", "交什么 · 材料", "有 / 缺；空位并入格式提示");
-  html += tableOpen(["须提交材料", "出处", "公司情况", "结论"]);
-  const matRows = cl.concat(kw);
-  if (!matRows.length) html += '<tr><td colspan="4" class="muted">暂无数据</td></tr>';
-  cl.forEach(function (row, i) {
-    const key = "cl:" + i;
-    html += '<tr data-key="' + key + '" class="' + rowClass(row) + (key === selectedKey ? " selected" : "") + '">' +
-      "<td>" + esc(row.cells[0] || "") + "</td>" +
-      "<td>" + refCell(row.refs) + "</td>" +
-      "<td>" + esc(row.cells[2] || "") + "</td>" +
-      "<td>" + tagHtml(row.status) + "</td></tr>";
-  });
-  kw.forEach(function (row, i) {
-    const key = "kw:" + i;
-    html += '<tr data-key="' + key + '" class="' + (key === selectedKey ? "selected" : "") + '">' +
-      "<td>" + esc((row.cells[0] || "") + " / " + (row.cells[1] || "")) + " <span class=\"muted\">需填表</span></td>" +
-      "<td>" + refCell(row.refs) + "</td>" +
-      "<td>" + esc(row.cells[2] || "") + "</td>" +
-      "<td><span class=\"tag neutral\">格式</span></td></tr>";
-  });
-  html += "</tbody></table></section>";
-
-  html += '<section class="block" id="s4">' + sectionHead("④", "得多少分 · 评分", "分项分 · 主观不预估");
-  html += tableOpen(["评分项", "分值", "性质", "评分标准", "出处", "公司材料", "预估"]);
-  if (!pf.length) html += '<tr><td colspan="7" class="muted">暂无数据</td></tr>';
-  pf.forEach(function (row, i) {
-    const key = "pf:" + i;
-    const nature = row.cells[2] || "";
-    const natureTag = nature.indexOf("主观") >= 0
-      ? '<span class="tag pending">主观</span>'
-      : (nature ? '<span class="tag ok">' + esc(nature || "客观") + "</span>" : "");
-    html += '<tr data-key="' + key + '" class="' + (key === selectedKey ? "selected" : "") + '">' +
-      "<td>" + esc(row.cells[0] || "") + "</td>" +
-      "<td>" + esc(row.cells[1] || "") + "</td>" +
-      "<td>" + natureTag + "</td>" +
-      "<td>" + esc(row.cells[3] || "") + "</td>" +
-      "<td>" + refCell(row.refs) + "</td>" +
-      "<td>" + esc(row.cells[5] || "") + "</td>" +
-      "<td>" + esc(row.cells[6] || "") + "</td></tr>";
-  });
-  html += "</tbody></table></section>";
-
-  html += '<section class="block" id="s5">' + sectionHead("⑤", "什么时候 · 时间", "时点与时长");
-  html += tableOpen(["节点", "时间", "说明", "出处"]);
-  if (!sj.length) html += '<tr><td colspan="4" class="muted">暂无数据</td></tr>';
-  sj.forEach(function (row, i) {
-    const key = "sj:" + i;
-    html += '<tr data-key="' + key + '" class="' + (key === selectedKey ? "selected" : "") + '">' +
-      "<td>" + esc(row.cells[0] || "") + "</td>" +
-      "<td>" + esc(row.cells[1] || "") + "</td>" +
-      "<td>" + esc(row.cells[2] || "") + "</td>" +
-      "<td>" + refCell(row.refs) + "</td></tr>";
-  });
-  html += "</tbody></table></section>";
-
-  html += '<section class="block" id="s6">' + sectionHead("⑥", "中标后 · 合同要点", "履约保证金留在此");
-  html += '<div class="contract-grid">';
-  if (!ht.length) html += '<div class="c-row"><div class="label">—</div><div class="val empty">暂无数据</div></div>';
-  ht.forEach(function (row, i) {
-    const key = "ht:" + i;
-    const st = row.status === "check" ? '<span class="tag pending">待人工</span>'
-      : row.status === "ok" ? '<span class="tag ok">有值</span>'
-      : row.status === "info" ? '<span class="tag neutral">原文未写明</span>'
-      : '<span class="tag neutral">—</span>';
-    html += '<div class="c-row" data-key="' + key + '" style="cursor:pointer">' +
-      '<div class="label">' + esc(row.cells[0] || "") + "</div>" +
-      '<div class="val">' + esc(row.cells[1] || "") + " " + refCell(row.refs) + "</div>" +
-      st + "</div>";
-  });
-  html += "</div></section></div>";
+  const sheets = renderMaterials(cl) + renderSheets(kw) +
+    (!cl.length && !kw.length ? '<p class="muted">暂无数据</p>' : "");
+  html += sectionBlock("s1", "①", "资格检查", "按判定归在一起", renderGates(fq));
+  html += sectionBlock("s2", "②", "废标检查", "按档归在一起", renderRisks(fb));
+  html += sectionBlock("s3", "③", "提交材料", "有没有；表名和页码", sheets);
+  html += sectionBlock("s4", "④", "评分标准", "分值在前，标准在下", renderScores(pf));
+  html += sectionBlock("s5", "⑤", "时间节点", "时点在上，时长在下", renderTimes(sj));
+  html += sectionBlock("s6", "⑥", "合同要点", "条款、内容和页码",
+    '<div class="contract-grid">' + renderContracts(ht) + "</div>");
+  html += "</div>";
 
   document.getElementById("report").innerHTML = html;
   bindReportClicks();
+  const opened = document.getElementById((location.hash || "").replace("#", ""));
+  if (opened && opened.tagName === "DETAILS") opened.open = true;
+}
+
+function renderEmptyReport() {
+  /* 没选文件、没出表之前，左侧不放示意结果 */
+  let text = "尚未选择招标文件，也还没有开始分析。";
+  if (jobStatus === "running") text = "正在分析招标文件，核对结果会显示在这里。";
+  else if (jobStatus === "done" || jobStatus === "error") text = "这次核对没有可显示的结果。";
+  document.getElementById("report").innerHTML = '<div class="empty">' + text + "</div>";
 }
 
 function renderAll() {
   if (hasLiveRows()) renderReportFromData();
-  else bindReportClicks();
+  else renderEmptyReport();
 }
 
 function pixelRatio() {
@@ -2116,22 +2159,22 @@ function showError(message) {
 }
 
 function setBusy(running) {
-  document.getElementById("btn-run").disabled = running;
-  document.getElementById("btn-library").disabled = running;
-  document.getElementById("btn-sample").disabled = running;
+  document.querySelectorAll(".btn-case").forEach(function (button) {
+    button.disabled = running;
+  });
 }
 
 function applyJob(job) {
+  jobStatus = job.status || "";
   renderSteps(job.stages);
-  document.getElementById("file-name").textContent = job.file_name || "未选择";
-  document.getElementById("company-name").textContent = job.company_name || "company.yaml";
+  document.getElementById("file-name").textContent = job.file_name || "待选择";
+  document.getElementById("company-name").textContent = job.company_name || "待选择";
   const meta = [];
   if (job.page_count) meta.push(job.page_count + " 页");
   if (job.sections && job.sections.length) meta.push(job.sections.length + " 章");
   if (job.missing && job.missing.length) meta.push("缺 " + job.missing.join("、"));
   document.getElementById("file-meta").textContent = meta.length ? "· " + meta.join(" · ") : "";
   setBusy(job.status === "running");
-  document.getElementById("btn-export").disabled = job.status !== "done";
   showError(job.status === "error" ? job.error : "");
   const sig = JSON.stringify(job.tables || {}) + "|" + (job.missing || []).join(",");
   if (sig === tableSig) return;
@@ -2158,36 +2201,37 @@ async function poll() {
   if (job.status === "running") pollTimer = setTimeout(poll, 1200);
 }
 
-async function begin(sample, mode) {
+async function beginCase(doc) {
+  // 服务端按公司读取成对的招标 PDF 和 company.yaml，从头跑完整核对。
   showError("");
-  const company = document.getElementById("company-yaml").value;
-  mode = mode || "full";
+  setBusy(true);
   let response;
-  if (sample) {
+  try {
     response = await fetch("/api/check/sample", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ company: company, mode: mode })
+      body: JSON.stringify({ doc: doc })
     });
-  } else {
-    const file = document.getElementById("pdf-file").files[0];
-    if (!file) {
-      showError("请先选择 PDF，或改用东城道路样本");
-      return;
-    }
-    const form = new FormData();
-    form.append("pdf", file);
-    form.append("company", company);
-    form.append("mode", mode);
-    response = await fetch("/api/check", { method: "POST", body: form });
+  } catch (err) {
+    setBusy(false);
+    showError(String(err && err.message || err));
+    return;
   }
   const body = await response.json();
   if (!response.ok) {
+    setBusy(false);
     showError(body.error || "无法开始核对");
     return;
   }
+  if (typeof body.company === "string") {
+    document.getElementById("company-yaml").value = body.company;
+  }
+  if (body.file_name) document.getElementById("file-name").textContent = body.file_name;
+  if (body.company_name) document.getElementById("company-name").textContent = body.company_name;
   if (pollTimer) clearTimeout(pollTimer);
   jobId = body.job_id;
+  jobStatus = "running";
+  renderEmptyReport();
   history.replaceState(null, "", "/?job=" + jobId);
   tableSig = "";
   selectedKey = null;
@@ -2273,25 +2317,9 @@ async function ask(text) {
   log.scrollTop = log.scrollHeight;
 }
 
-document.getElementById("btn-pick").onclick = function () {
-  document.getElementById("pdf-file").click();
-};
-document.getElementById("pdf-file").onchange = function () {
-  const file = document.getElementById("pdf-file").files[0];
-  if (file) document.getElementById("file-name").textContent = file.name;
-};
-document.getElementById("btn-sample").onclick = function () { begin(true, "full"); };
-document.getElementById("btn-library").onclick = function () {
-  const file = document.getElementById("pdf-file").files[0];
-  begin(!file, "library");
-};
-document.getElementById("btn-run").onclick = function () {
-  const file = document.getElementById("pdf-file").files[0];
-  begin(!file, "full");
-};
-document.getElementById("btn-export").onclick = function () {
-  if (jobId) window.location = "/api/jobs/" + jobId + "/export.xlsx";
-};
+document.querySelectorAll(".btn-case").forEach(function (button) {
+  button.onclick = function () { beginCase(button.dataset.doc); };
+});
 document.getElementById("ask-send").onclick = function () {
   const input = document.getElementById("ask-text");
   ask(input.value);

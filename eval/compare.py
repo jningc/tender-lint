@@ -1,7 +1,7 @@
 """对着人工核过的题集，给一次 check 的输出打分。
 
 用法:
-  python eval/compare.py eval/baseline/beijing_road/check.txt --doc beijing_road -v
+  python eval/compare.py eval/snapshots/baseline/beijing_road/check.txt --doc beijing_road -v
   python eval/compare.py <check.txt> --doc <doc> --json out.json   # 门禁读这个
   python eval/compare.py <check.txt> --json -                     # JSON 打到 stdout
 

@@ -627,8 +627,8 @@ def _cut(s, n: int = 64) -> str:
 def render_tables(result: dict) -> str:
     """核对结果：先给结论，再按「投标人要办的事」分六块。
 
-    顺序见 `sample/输出形式-落地版.md`：能不能投 → 会不会废 → 交什么 →
-    得多少分 → 什么时候 → 中标后。前附表与事项卡作为附加证据放在最后。
+    六块顺序：资格检查 → 废标检查 → 提交材料 → 评分标准 → 时间节点 → 合同要点。
+    前附表与事项卡作为附加证据放在最后。
     """
     fb = result.get("feibiao") or []
     cai = result.get("cailiao") or []
@@ -652,20 +652,20 @@ def render_tables(result: dict) -> str:
     if result.get("missing"):
         lines.append("  缺失章节：" + "、".join(result["missing"]))
 
-    # ① 能不能投
+    # ① 资格检查
     q_rows = [r for r in fb if (r.get("kind") or "") == "资格门槛"]
-    lines.append(f"\n① 能不能投 · 资格门槛 {len(q_rows)} 条")
+    lines.append(f"\n① 资格检查 {len(q_rows)} 条")
     for r in q_rows:
         tier = r.get("tier") or ""
         lines.append(f"    [{tier}] {r.get('verdict')} | {_cut(r.get('condition'), 58)}{_pages(r)}")
     if not q_rows:
         lines.append("    （未抽取到资格门槛条目）")
 
-    # ② 会不会废
+    # ② 废标检查
     bad = [r for r in fb if (r.get("kind") or "") != "资格门槛"]
     order = {"必废": 0, "需确认": 1, "非投标人": 2, "已满足": 3, "其他": 4}
     bad.sort(key=lambda r: order.get(r.get("tier") or "", 9))
-    lines.append(f"\n② 会不会废 · 无效情形 {len(bad)} 条（按确定性排序）")
+    lines.append(f"\n② 废标检查 {len(bad)} 条（按确定性排序）")
     for r in bad:
         cond = str(r.get("condition") or "")
         # 条件原文已经带 ★/▲ 时不再补前缀，避免「★ ▲xxx」
@@ -674,8 +674,8 @@ def render_tables(result: dict) -> str:
     if not bad:
         lines.append("    （未抽取到无效情形）")
 
-    # ③ 交什么（空位并入「需填表」一行）
-    lines.append(f"\n③ 交什么 · 材料 {len(cai)} 条")
+    # ③ 提交材料（空位并入「需填表」一行）
+    lines.append(f"\n③ 提交材料 {len(cai)} 条")
     for r in cai:
         lines.append(f"    [{r.get('verdict')}] {_cut(r.get('material'), 52)}{_pages(r)}")
     if kw:
@@ -683,24 +683,24 @@ def render_tables(result: dict) -> str:
         if forms:
             lines.append(f"    [需填表] {'、'.join(forms)}（格式章空表，点进去看模板）")
 
-    # ④ 得多少分
+    # ④ 评分标准
     total = sum(i for i in (_num(r.get("score")) for r in pf) if i)
     labels = "、".join(sorted({str(r.get("category") or "").strip() for r in pf if str(r.get("category") or "").strip()}))
     tail = f"（本表可见分项合计 {total:g} 分" + (f"；分类：{labels}" if labels else "") + "）" if total else ""
-    lines.append(f"\n④ 得多少分 · 评分 {len(pf)} 条{tail}")
+    lines.append(f"\n④ 评分标准 {len(pf)} 条{tail}")
     for r in pf:
         est = r.get("estimate")
         tail = f"  ← 估 {est}" if est else ""
         lines.append(f"    {_cut(r.get('item'), 34):<34} {str(r.get('score') or ''):>6}"
                      f"  {_cut(r.get('standard'), 40)}{_pages(r)}{tail}")
 
-    # ⑤ 什么时候
-    lines.append(f"\n⑤ 什么时候 · 时间节点 {len(sj)} 条")
+    # ⑤ 时间节点
+    lines.append(f"\n⑤ 时间节点 {len(sj)} 条")
     for r in sj:
         lines.append(f"    {_cut(r.get('when'), 40):<40} {_cut(r.get('name'), 24)}{_pages(r)}")
 
-    # ⑥ 中标后
-    lines.append(f"\n⑥ 中标后 · 合同要点 {len(ht)} 条")
+    # ⑥ 合同要点
+    lines.append(f"\n⑥ 合同要点 {len(ht)} 条")
     for r in ht:
         lines.append(f"    {_cut(r.get('item'), 20):<20} {_cut(r.get('content'), 56)}{_pages(r)}")
 

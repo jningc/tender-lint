@@ -11,11 +11,9 @@ import copy
 import json
 import threading
 import uuid
-from io import BytesIO
 from pathlib import Path
 
 import yaml
-from openpyxl import Workbook
 from starlette.applications import Starlette
 from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
@@ -29,33 +27,48 @@ from tender.parse import render_page_png
 from tender.tools import set_context
 
 ROOT = Path(__file__).resolve().parent.parent
-SAMPLE_PDF = ROOT / "sample" / "beijing_road.pdf"
-SAMPLE_COMPANY = ROOT / "sample" / "beijing_road_company.yaml"
+# 页面上的三家公司。点哪一家，就用这一对招标 PDF 和 company.yaml，从头跑完整核对。
+CASES = (
+    {
+        "id": "beijing_road",
+        "label": "示例监理有限公司",
+        "pdf": ROOT / "sample" / "beijing_road.pdf",
+        "company": ROOT / "sample" / "beijing_road_company.yaml",
+    },
+    {
+        "id": "chongzuo_green",
+        "label": "示例崇左绿林工程有限公司",
+        "pdf": ROOT / "sample" / "chongzuo_green.pdf",
+        "company": ROOT / "sample" / "chongzuo_green_company.yaml",
+    },
+    {
+        "id": "wenling_video",
+        "label": "示例温岭视联技术有限公司",
+        "pdf": ROOT / "sample" / "wenling_video.pdf",
+        "company": ROOT / "sample" / "wenling_video_company.yaml",
+    },
+)
+CASE_BY_ID = {item["id"]: item for item in CASES}
+# 空页面编辑框仍先放第一家的公司情况。
+SAMPLE_COMPANY = CASES[0]["company"]
 PAGE = ROOT / "static" / "index.html"
 VENDOR = ROOT / "static" / "vendor"
 UPLOAD_ROOT = ROOT / "data" / "web_jobs"
 
-# 页面顶部进度条的固定顺序
+# 页面顶部进度。顺序跟当前默认流水线一致：
+# 解析段（页、章、表、条款、索引）→ 抽取六表 → 比对归表 → 校验回查。
 STAGE_DEFS = [
     ("parse", "解析", "按页抽文字和块坐标"),
     ("sections", "切章", "按标题标成章节类型"),
-    ("index", "建索引", "每种章单独建 BM25 和 FAISS"),
-    ("feibiao", "1 查废标", "只搜：投标邀请、投标人须知、资格审查"),
-    ("pingfen", "2 查评分", "只搜：评标办法"),
-    ("cailiao", "3 查材料", "只搜：须知、资格审查、格式，再对 company.yaml"),
-    ("kongwei", "4 列空位", "只搜：投标文件格式"),
-    ("aux", "辅助", "时间节点和合同要点"),
+    ("tables", "表格", "评分表和前附表"),
+    ("clauses", "条款", "按编号切成条款"),
+    ("index", "建索引", "条款和表行按章建库"),
+    ("extract", "抽取", "对照公司情况抽出六张表"),
+    ("compare", "比对", "每条结论归到对应的表"),
+    ("verify", "校验", "回查页码、数字和交叉引用"),
 ]
 
 TABLE_KEYS = ("feibiao", "pingfen", "cailiao", "kongwei", "shijian", "hetong")
-TABLE_TITLES = {
-    "feibiao": "废标对照",
-    "pingfen": "评分对照",
-    "cailiao": "材料对照",
-    "kongwei": "空位对照",
-    "shijian": "时间节点",
-    "hetong": "合同要点",
-}
 
 _lock = threading.Lock()
 _ask_lock = threading.Lock()
@@ -139,6 +152,12 @@ def _apply(job_id: str, event: dict) -> None:
         # 只接受 index 阶段带的 page_texts（索引完才对前端可见），忽略 parse 早期误发
         if "page_texts" in event and stage_id == "index":
             job["page_texts"] = event["page_texts"]
+        # 复用已有库时不再抽表、切条款，这两步标成完成，避免一直停在等待
+        if stage_id == "index" and event.get("state") == "done" and "复用" in (event.get("detail") or ""):
+            for skipped in job["stages"]:
+                if skipped["id"] in ("tables", "clauses") and skipped["state"] == "wait":
+                    skipped["state"] = "done"
+                    skipped["detail"] = "随索引复用"
 
 
 def _worker(job_id: str, pdf_path: str, company_path: str, use_index: bool = False) -> None:
@@ -207,60 +226,42 @@ async def meta(request: Request):
     return Json({"stages": _blank_stages(), "company": text})
 
 
-async def start_upload(request: Request):
-    """上传 PDF 和 company.yaml，立刻返回任务号。"""
-    form = await request.form()
-    upload = form.get("pdf")
-    company_text = form.get("company")
-    if not isinstance(company_text, str):
-        return Json({"error": "缺少 company.yaml"}, status_code=400)
-    try:
-        company = _parse_company(company_text)
-    except ValueError as exc:
-        return Json({"error": str(exc)}, status_code=400)
-    if upload is None or not getattr(upload, "filename", ""):
-        return Json({"error": "请上传 PDF"}, status_code=400)
-    raw = await upload.read()
-    if not raw:
-        return Json({"error": "PDF 是空的"}, status_code=400)
-    job_id = uuid.uuid4().hex[:12]
-    folder = UPLOAD_ROOT / job_id
-    folder.mkdir(parents=True, exist_ok=True)
-    pdf_path = folder / Path(upload.filename).name
-    pdf_path.write_bytes(raw)
-    (folder / "company.yaml").write_text(company_text, encoding="utf-8")
-    use_index = str(form.get("mode") or "") == "library"
-    _launch(
-        job_id,
-        Path(upload.filename).name,
-        company,
-        pdf_path,
-        folder / "company.yaml",
-        use_index,
-    )
-    return Json({"job_id": job_id})
+def _case(doc_id: str) -> dict:
+    """按公司编号取出成对的招标 PDF 和 company.yaml。"""
+    item = CASE_BY_ID.get(doc_id or "")
+    if item is None:
+        raise ValueError(f"未知公司: {doc_id or '空'}")
+    if not item["pdf"].exists():
+        raise ValueError(f"招标文件不存在: {item['pdf'].name}")
+    if not item["company"].exists():
+        raise ValueError(f"公司情况不存在: {item['company'].name}")
+    return item
 
 
 async def start_sample(request: Request):
-    """用样本 PDF 开始。company 文本来自页面上的编辑框。"""
+    """按公司载入成对的招标 PDF 和 company.yaml，从头跑完整核对。"""
     body = await request.json()
-    company_text = body.get("company") if isinstance(body, dict) else ""
-    if not isinstance(company_text, str):
-        return Json({"error": "缺少 company.yaml"}, status_code=400)
+    doc_id = body.get("doc") if isinstance(body, dict) else ""
+    if not isinstance(doc_id, str):
+        return Json({"error": "缺少公司"}, status_code=400)
     try:
+        item = _case(doc_id)
+        company_text = item["company"].read_text(encoding="utf-8")
         company = _parse_company(company_text)
     except ValueError as exc:
         return Json({"error": str(exc)}, status_code=400)
-    if not SAMPLE_PDF.exists():
-        return Json({"error": f"样本不存在: {SAMPLE_PDF.name}"}, status_code=400)
     job_id = uuid.uuid4().hex[:12]
     folder = UPLOAD_ROOT / job_id
     folder.mkdir(parents=True, exist_ok=True)
     company_path = folder / "company.yaml"
     company_path.write_text(company_text, encoding="utf-8")
-    use_index = (body.get("mode") if isinstance(body, dict) else "") == "library"
-    _launch(job_id, SAMPLE_PDF.name, company, SAMPLE_PDF, company_path, use_index)
-    return Json({"job_id": job_id})
+    _launch(job_id, item["pdf"].name, company, item["pdf"], company_path, False)
+    return Json({
+        "job_id": job_id,
+        "company": company_text,
+        "file_name": item["pdf"].name,
+        "company_name": str(company.get("name") or item["label"]),
+    })
 
 
 async def job_state(request: Request):
@@ -352,61 +353,16 @@ async def ask(request: Request):
     return Json({"answer": out["answer"], "trace": out["trace"]})
 
 
-def _xlsx(tables: dict) -> bytes:
-    wb = Workbook()
-    first = True
-    for key in TABLE_KEYS:
-        title = TABLE_TITLES[key]
-        ws = wb.active if first else wb.create_sheet(title)
-        if first:
-            ws.title = title
-            first = False
-        rows = tables.get(key) or []
-        if not rows:
-            ws.append(["空"])
-            continue
-        cols = [col for col in rows[0].keys() if col != "refs"]
-        ws.append(cols + ["出处"])
-        for row in rows:
-            src = "；".join(
-                f"p.{ref.get('page')} {ref.get('chapter')}"
-                for ref in (row.get("refs") or [])
-                if ref.get("page")
-            )
-            ws.append([str(row.get(col, "")) for col in cols] + [src])
-    buf = BytesIO()
-    wb.save(buf)
-    return buf.getvalue()
-
-
-async def export_xlsx(request: Request):
-    """导出当前已经出的表。"""
-    job_id = request.path_params["job_id"]
-    with _lock:
-        job = _jobs.get(job_id)
-        if job is None:
-            return Json({"error": "任务不存在"}, status_code=404)
-        tables = {key: list(job["tables"].get(key) or []) for key in TABLE_KEYS}
-    data = await run_in_threadpool(_xlsx, tables)
-    return Response(
-        data,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": "attachment; filename=tender-check.xlsx"},
-    )
-
-
 app = Starlette(
     routes=[
         Route("/", page, methods=["GET"]),
         Route("/api/meta", meta, methods=["GET"]),
-        Route("/api/check", start_upload, methods=["POST"]),
         Route("/api/check/sample", start_sample, methods=["POST"]),
         Route("/api/jobs/{job_id}", job_state, methods=["GET"]),
         Route("/api/jobs/{job_id}/file", job_pdf, methods=["GET"]),
         Route("/api/jobs/{job_id}/parsed-text", job_parsed_text, methods=["GET"]),
         Route("/api/jobs/{job_id}/pages/{page:int}", page_png, methods=["GET"]),
         Route("/api/jobs/{job_id}/ask", ask, methods=["POST"]),
-        Route("/api/jobs/{job_id}/export.xlsx", export_xlsx, methods=["GET"]),
         Mount("/vendor", app=StaticFiles(directory=str(VENDOR))),
     ]
 )

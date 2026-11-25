@@ -1,0 +1,108 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>评分表行核对</title>
+<style>
+:root { color-scheme: light; }
+body { font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+       color: #1d1d1f; background: #fff; max-width: 1180px; margin: 0 auto; padding: 28px 24px 80px; }
+h1 { font-size: 20px; margin: 0 0 6px; }
+.sub { color: #666; font-size: 13px; margin-bottom: 18px; }
+#bar { position: sticky; top: 0; background: #fff; border-bottom: 1px solid #e5e5e5;
+       padding: 10px 0; margin-bottom: 18px; font-size: 13px; z-index: 10; }
+#bar b { font-variant-numeric: tabular-nums; }
+#issues { color: #b3261e; }
+.block { margin: 30px 0 42px; }
+.block h2 { font-size: 15px; margin: 0 0 4px; }
+.meta { color: #666; font-size: 12px; margin-bottom: 8px; }
+.checks { color: #0b6b3a; font-weight: 600; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { border: 1px solid #cfcfcf; padding: 6px 9px; vertical-align: middle; text-align: left; }
+th { background: #f6f6f7; font-weight: 600; }
+td.mark { width: 34px; text-align: center; cursor: pointer; user-select: none;
+          background: #fafafa; font-size: 15px; }
+td.mark::after { content: "○"; color: #bbb; }
+tr.ok td.mark { background: #e8f5ec; }
+tr.ok td.mark::after { content: "✓"; color: #137333; font-weight: 700; }
+tr.bad td.mark { background: #fdecea; }
+tr.bad td.mark::after { content: "✕"; color: #b3261e; font-weight: 700; }
+tr.ok td { background: #f7fcf8; }
+tr.bad td:not(.mark) { background: #fff8f7; }
+tr:hover td.mark { filter: brightness(0.96); }
+.hint { color: #666; font-size: 12px; margin-top: 10px; }
+</style>
+<div id="bar">
+  已确认 <b id="done">0</b> / <b id="left">35</b> 待核 ·
+  有问题 <b id="badcount">0</b>　<span id="issues"></span>
+</div>
+<h1>评分表行核对（A1）</h1>
+<div class="sub">点每行最左边的圆圈：○ 未核 → ✓ 确认 → ✕ 有问题 → ○。
+共 35 行、5 张表。核对完把「有问题」那一串 id 发给我就行。</div>
+
+<section class="block">
+  <h2>beijing_road:p33:1　3 列 · 1 行</h2>
+  <div class="meta">页 [33]　　表头：评分项目 | 评分标准 | 说明</div>
+  <table>
+    <thead><tr><th class='mark' rowspan='1'></th><th>评分项目</th><th>评分标准</th><th>说明</th></tr></thead>
+    <tbody><tr data-case='beijing_road:p33:1:r00'><td class='mark'></td><td>投标报价（30分）</td><td>满足招标文件要求且投标价格最低的投标报价为评标基准价，其价格分为满分。其他投标人的价格分统一按照下列公式计算：投标报价得分＝（评标基准价/投标报价）×30。</td><td>此处投标报价指经过报价修正，及因落实政府采购政策进行价格调整后的报价，详见第四章《评标方法和评标标准》2.4及2.5。</td></tr></tbody>
+  </table>
+</section>
+<section class="block">
+  <h2>beijing_road:p33:2　6 列 · 3 行</h2>
+  <div class="meta">页 [33]　<span class='checks'>✓ Σ分项 10 = 合计 10</span>　表头：分类 | 序号 | 评审因素 | 标准分 | 标准分 | 评审标准 / 分类 | 序号 | 评审因素 | 分项 | 合计 | 评审标准</div>
+  <table>
+    <thead><tr><th class='mark' rowspan='2'></th><th rowspan="2">分类</th><th rowspan="2">序号</th><th rowspan="2">评审因素</th><th colspan="2">标准分</th><th rowspan="2">评审标准</th></tr><tr><th>分项</th><th>合计</th></tr></thead>
+    <tbody><tr data-case='beijing_road:p33:2:r00'><td class='mark'></td><td rowspan="3">商务部分（10分）</td><td>1</td><td>类似项目业绩</td><td>4分</td><td rowspan="3">10分</td><td>具有近三年（2023年7月1日至今）类似工程监理业绩，每个2分，满分4分</td></tr><tr data-case='beijing_road:p33:2:r01'><td class='mark'></td><td>2</td><td>总监理工程师类似业绩</td><td>3分</td><td>在担任总监理工程师职务下的类似监理业绩；1个以上（含）3分，没有业绩不得分。</td></tr><tr data-case='beijing_road:p33:2:r02'><td class='mark'></td><td>3</td><td>体系认证</td><td>3分</td><td>企业通过质量管理体系认证、环境管理体系认证、职业健康安全管理体系认证，具有一个得1分，满分3分。</td></tr></tbody>
+  </table>
+</section>
+<section class="block">
+  <h2>beijing_road:p33:3　3 列 · 8 行</h2>
+  <div class="meta">页 [33, 34]　　表头：分类 | 评审内容 | 评审标准</div>
+  <table>
+    <thead><tr><th class='mark' rowspan='1'></th><th>分类</th><th>评审内容</th><th>评审标准</th></tr></thead>
+    <tbody><tr data-case='beijing_road:p33:3:r00'><td class='mark'></td><td>技术部分（60分）</td><td>质量控制措施(8分)</td><td>1.明确工程质量要求阶段性实现的保证措施，方案内容针对本项目，得8分;2.方案有一定的针对性，满足项目服务需要，但细节需要完善，得6分;3.方案通用，满足项目服务需要，得4分;4.方案有欠缺，得2分;5.未提供相关方案，得0分</td></tr><tr data-case='beijing_road:p33:3:r01'><td class='mark'></td><td>技术部分（60分）</td><td>进度控制措施(8分)</td><td>1.提供了详细的进度计划，阶段分明，内容针对本项目，得8分;2.方案详细、内容全面但阶段划分不明显，得6分;3.方案通用，不针对本项目，得4分;4.方案阶段划分不详细，得2分;5.未提供相关方案，得0分。</td></tr><tr data-case='beijing_road:p33:3:r02'><td class='mark'></td><td>技术部分（60分）</td><td>造价控制措施(8分)</td><td>1.方法科学，措施针对本项目，得8分;2.方法科学，措施部分针对本项目，得6分;3.方法通用，部分针对本项目，得4分;4.方法有欠缺，得2分;5.未提供相关方案，得0分。</td></tr><tr data-case='beijing_road:p33:3:r03'><td class='mark'></td><td>技术部分（60分）</td><td>合同和文档管理方案(8分)</td><td>1.方案管理机制健全，项目相关知识库体系建立完整，得8分;2.方案管理机制较健全，建立相关知识库体系，得6分;3.方案管理机制或项目相关知识库体系通用，部分针对本项目，得4分;4.方案管理机制或项目相关知识库体系建立有欠缺，得2分;5.未提供相关方案，得0分。</td></tr><tr data-case='beijing_road:p33:3:r04'><td class='mark'></td><td>技术部分（60分）</td><td>安全管理方案(7分)</td><td>1.有健全的安全管理体系，针对本项目，措施完善，得7分;2.有安全管理体系，部分针对本项目，措施较完善，得5分;3.方案部分内容有一定的针对性，得3分;4.措施不力，不针对本项目，得1分;5.未提供相关方案，得0分。</td></tr><tr data-case='beijing_road:p33:3:r05'><td class='mark'></td><td>技术部分（60分）</td><td>环境保护和安全文明施工管理(7分)</td><td>1.方法科学，内容针对本项目，得7分;2.方法较科学，内容针对本项目，但细节需要完善，得5分;3.方案部分内容通用，部分针对本项目，得3分;4.措施不力，不针对本项目，得1分;5.未提供相关方案，得0分。</td></tr><tr data-case='beijing_road:p33:3:r06'><td class='mark'></td><td>技术部分（60分）</td><td>监理机构和监理岗位设置情况及职责划分(7分)</td><td>1.组织架构图清晰、完整，各专业监理工程师人员数量充足，有明确的人员更换约束条款和后备人员保障方案，得7分;2.组织架构图清晰、完整，各专业监理工程师人员数量满足项目要求，有人员更换约束条款和后备人员保障方案，但细节需要完善，得5分;3.部分内容完善，有一定的针对性，得3分;4.组织架构图不清晰，各专业监理工程师人员数量不充足，不针对本项目，得1分;5.未提供相关方案，得0分。</td></tr><tr data-case='beijing_road:p33:3:r07'><td class='mark'></td><td>技术部分（60分）</td><td>工程特点、监理工作的重点与难点分析及监理对策(7分)</td><td>1.重点突出、难点分析透彻，与本工程特点紧密对应，能够精准概括本项目“多专业、多界面、多单位交叉”的综合性特点，得7分;2.重点、难点分析针对本工程特点，但细节需要完善，得5分;3.识别了大部分重点、难点，分析深度不够或预见性不足，得3分;4.重点、难点分析浅显，多为常见施工困难，与通用项目区别不大，得1分;5.未提供相关方案，得0分。</td></tr></tbody>
+  </table>
+</section>
+<section class="block">
+  <h2>chongzuo_green:p46:1　4 列 · 9 行</h2>
+  <div class="meta">页 [46, 47, 48]　　表头：序号 | 序号 | 评审因素 | 评标标准</div>
+  <table>
+    <thead><tr><th class='mark' rowspan='1'></th><th colspan="2">序号</th><th>评审因素</th><th>评标标准</th></tr></thead>
+    <tbody><tr data-case='chongzuo_green:p46:1:r00'><td class='mark'></td><td>1</td><td>价格分（20分）</td><td>投标报价分（满分20分）</td><td>（1）评标报价为投标人的投标报价进行政策性扣除后的价格，评标报价只是作为评标时使用。最终中标人的中标金额等于投标报价。（2）中小企业政策性扣除计算方法本项目专门面向中小企业采购，不再进行价格折扣扣除。（3）本国产品政策性扣除计算方法本项目为服务采购，不涉及货物，不执行政府采购中实施本国产品标准及相关政策通知的规定。（4）评标报价=投标报价。（5）满足招标文件要求且评标报价最低的评标报价为评标基准价，其价格分为满分。（6）价格分计算公式：价格分=（评标基准价／评标报价）×20分</td></tr><tr data-case='chongzuo_green:p46:1:r01'><td class='mark'></td><td rowspan="4">2</td><td rowspan="4">技术分（满分60分）</td><td>实施方案（主要分部分项实施方法及技术措施、实施部署及现场组织管理机构）（12分）</td><td>四挡（12分）：方案包括林木采伐、林地清理、修枝、割灌除草、剩余物清理、栽植补植、施肥、抚育。以上方案内容完整、详细清晰、符合本项目采购特点，完全满足或优于采购需求的；三档（8分）：方案包括林木采伐、林地清理、修枝、割灌除草、剩余物清理、栽植补植、施肥、抚育。以上方案内容完整但不够清晰、基本符合本项目采购特点，部分满足采购需求的；二档（4分）：方案包括林木采伐、林地清理、修枝、割灌除草、剩余物清理、栽植补植、施肥、抚育。以上方案内容有缺失且不够清晰、仅少部分满足采购需求的；一档（2分）：有提供方案，但方案不满足，不符合本项目要求。</td></tr><tr data-case='chongzuo_green:p46:1:r02'><td class='mark'></td><td>）质量保证体系及安全管理措施（12分）</td><td>四档（12分）：针对本工程的特殊性建立严格的质量保证体系及科学的安全保证措施，并有详细描述且完全符合本工程的要求。三档（8分）：针对本工程的特殊性建立质量保证体系及安全保证措施，并有完善描述且符合本工程的要求。二档（4分）：针对本工程的特殊性建立质量保证体系及安全保证措施，并有简单描述且基本符合本工程的要求。一档（2分）：未提供或所提供的质量保证体系及安全保证措施不符合本工程要求。</td></tr><tr data-case='chongzuo_green:p46:1:r03'><td class='mark'></td><td>施工总进度计划及工期保证措施（12分）</td><td>四档（12分）：进度计划及工期保证措施科学合理。能够全面、准确、清楚地描述本项目实施全过程进度计划；在施工工艺、施工方法、劳动力安排、村民协调、技术等方面有保证工期的具体措施且措施得当。三档（8分）：进度计划及工期保证措施合理。能够详细描述本项目实施全过程进度计划；在施工工艺、施工方法、劳动力安排、村民协调、技术等方面有保证工期的具体措施。二档（4分）：进度计划及工期保证措施基本合理。能够简单描述本项目实施全过程进度计划；在施工工艺、施工方法、劳动力安排、技术等方面有保证工期的措施。一档（2分）：未提供或提供的计划及保证措施不符合本工程要求。</td></tr><tr data-case='chongzuo_green:p46:1:r04'><td class='mark'></td><td>关键施工技术、工艺及工程实施的重点、难点和解决方案(12分)</td><td>四档（12分）：针对本工程的特点，阐述本工程的重点和难点，解决重点和难点问题的方法科学合理，可行性、针对性强。三档（8分）：针对本工程的特点，阐述本工程的重点和难点，解决重点和难点问题的方法合理，有一定可行性、针对性。二档（4分）：针对本工程的特点，阐述本工程的重点和难点，解决重点和难点问题的方法简单，不具备针对性。一档（2分）：未提供或未针对本工程的特点，阐述本工程的重点和难点的。</td></tr><tr data-case='chongzuo_green:p46:1:r05'><td class='mark'></td><td></td><td></td><td>抚育期保障措施（12分）</td><td>四档（12分）：针对本工程实施内容，提出有针对性的科学的抚育期服务方案，包含定期回访、服务流程等内容，内容完整、合理，且拟派的管护人员能够满足项目需求的，管护服务保证内容能够满足本项目的要求。三档（8分）：针对本工程实施内容，提出抚育期服务方案，包含定期回访、服务流程等内容，管护服务保证内容能够基本满足本项目的要求。二档（4分）：抚育期服务方案内容较为简单，但基本可行的。一档（2分）：未提供或所提供抚育期服务方案无针对性、可行性。</td></tr><tr data-case='chongzuo_green:p46:1:r06'><td class='mark'></td><td rowspan="2">3</td><td rowspan="3">商务分（满分20分）</td><td>管理人员综合实力分（15分）</td><td>（1）项目经理具有林业或园林高级及以上工程师职称，提供一个得3分，此项满分3分。（2）技术负责人具备林业或园林高级及以上工程师职称，提供一个得3分，此项满分3分。（3）拟投入其他管理人员（项目经理和项目技术负责人除外）:1.安全员（1人）：具体负责项目施工的安全生产培训、重要环节（林木采伐、整地、种植等）的监督、安全事故的处置等工作，具备安全员培训证等相关证书得3分。2.资料员（1人）：具体负责项目建设的档案资料收集、管理等工作，具备上岗证或岗位培训证或资料员证或投标单位出具的岗位任职文件得3分。3.劳资专管员（1人）：具体负责项目建设的劳务考勤登记、工资清册制作及农民工工资发放等工作，具备上岗证或岗位培训证或投标单位出具的岗位任职文件得3分。注:提供投标人为以上人员在本单位缴纳投标截止日前近一个月（2026年6月至投标截止时间止任意一个月社保）的社会保险的证明材料，否则不予计分。</td></tr><tr data-case='chongzuo_green:p46:1:r07'><td class='mark'></td><td rowspan="2">业绩分（5分）</td><td rowspan="2">投标人自2021年以来，具有人工造林、森林抚育、园林绿化、石漠化治理、退化林修复等类似营造林工程项目业绩，以合同或项目验收合格证明材料为准。每个项目得1分，共5分。</td></tr><tr data-case='chongzuo_green:p46:1:r08'><td class='mark'></td><td colspan="4">总得分=1+2+3。</td></tr></tbody>
+  </table>
+</section>
+<section class="block">
+  <h2>wenling_video:p19:1　4 列 · 14 行</h2>
+  <div class="meta">页 [19, 20, 21]　　表头：序号 | 内容 | 评分标准 | 分值</div>
+  <table>
+    <thead><tr><th class='mark' rowspan='1'></th><th>序号</th><th>内容</th><th>评分标准</th><th>分值</th></tr></thead>
+    <tbody><tr data-case='wenling_video:p19:1:r00'><td class='mark'></td><td>1</td><td>拟投入项目经理情况</td><td>拟投入项目经理具有计算机应用专业或通信专业或电子专业的工程师及以上职称的得2分。（商务技术文件中须提供职称证书复印件，不提供不得分）</td><td>2</td></tr><tr data-case='wenling_video:p19:1:r01'><td class='mark'></td><td>2</td><td>项目人员情况</td><td>根据实施团队的专业素质、技术能力进行打分。项目实施团队（除项目经理外）具有信息系统项目管理师、网络工程师等专业技术资格证书的，每提供一个得1分，满分2分。（商务技术文件中须提供职称证书复印件，不提供不得分）</td><td>2</td></tr><tr data-case='wenling_video:p19:1:r02'><td class='mark'></td><td>3</td><td>业绩</td><td>投标人承接过类似视频监控类项目的，每提供一个合同得1分，最高不超过2分。（商务技术文件中提供合同复印件加盖公章，否则不得分）</td><td>。2</td></tr><tr data-case='wenling_video:p19:1:r03'><td class='mark'></td><td>4.1</td><td rowspan="3">性能指标及技术响应</td><td>16路硬盘录像机：根据投标人选择的硬盘录像机技术参数、响应程度等综合评分。技术参数详细具体，完全响应或优于招标文件要求的得2-3分；技术参数描述较具体，基本符合招标文件要求，得1-1.9分；技术参数内容简单，不能完全满足招标文件要求或未提供相应资料的得0-0.9分。</td><td>。3</td></tr><tr data-case='wenling_video:p19:1:r04'><td class='mark'></td><td>4.2</td><td>32路硬盘录像机：根据投标人选择的硬盘录像机技术参数、响应程度等综合评分。技术参数详细具体，完全响应或优于招标文件要求的得2-3分；技术参数描述较具体，基本符合招标文件要求，得1-1.9分；技术参数内容简单，不能完全满足招标文件要求或未提供相应资料的得0-0.9分。</td><td>。3</td></tr><tr data-case='wenling_video:p19:1:r05'><td class='mark'></td><td>4.3</td><td>硬盘：根据投标人选择的硬盘的技术参数、响应程度等综合评分。技术参数详细具体，完全响应或优于招标文件要求的得3.4-5分；技术参数描述较具体，基本符合招标文件要求，得1.7-3.3分；技术参数内容简单，不能完全满足招标文件要求或未提供相应资料的得0-1.6分。</td><td>。5</td></tr><tr data-case='wenling_video:p19:1:r06'><td class='mark'></td><td>4.4</td><td></td><td>平台扩容和运维升级部分：根据投标人选择的原有平台扩容和运维升级及包含相关硬件的技术参数、响应程度，平台系统实施方案等综合评分。技术参数详细具体，完全响应或优于招标文件要求的得3.4-5分；技术参数描述较具体，基本符合招标文件要求，得1.7-3.3分；技术参数内容简单，不能完全满足招标文件要求或未提供相应资料的得0-1.6。</td><td>5</td></tr><tr data-case='wenling_video:p19:1:r07'><td class='mark'></td><td>5.1</td><td rowspan="3">实施方案</td><td>投标人的本地服务网点数量、人员、车辆配置情况等综合评定。网点数量、人员、车辆配置情况等完全满足项目要求的，得2-3分；网点数量、人员、车辆配置情况等基本可以满足项目要求的，得1-1.9分；网点数量、人员、车辆配置情况等较差的，不能完全满足项目要求的得0-0.9分。</td><td>。3</td></tr><tr data-case='wenling_video:p19:1:r08'><td class='mark'></td><td>5.2</td><td>针对投标人对本项目与服务单位有效对接方案的兼容性，稳定性和对接所需时间进行综合评分。能进行有效对接，兼容性、稳定性强的，得2-3分；无法有效对接，兼容性、稳定性一般的，得1-1.9分；无法有效对接，兼容性、稳定性较差的，得0-0.9分。</td><td>3</td></tr><tr data-case='wenling_video:p19:1:r09'><td class='mark'></td><td>5.3</td><td>针对投标人对温岭市雪亮工程视频共享整合接入服务采购项目项目运维熟悉程度描述进行综合评分。熟悉本项目的施工方案和运维流程的，得2.6-4分；基本熟悉类似项目的施工方案和运维的，得1.1-2.5分；不熟悉类似项目的施工方案和运维流程的，得0-1分。</td><td>4</td></tr><tr data-case='wenling_video:p19:1:r10'><td class='mark'></td><td>6</td><td>组网方案及机房</td><td>根据投标人选择的链路资源、组网方案、机房资源等综合评分。链路资源、组网方案、机房资源等基础设施完全响应或优于项目实际需求，无需新建的，得6-8分；链路资源、组网方案、机房资源等基础设施基本满足项目实际需求，无需新建的，得4-5.9分；链路资源、组网方案、机房资源等基础设施基本满足项目实际需求，但还需另外新建的，得2-3.9分；链路资源、组网方案、机房资源等基础设施不能完全满足项目实际需求的，但还需另外新建的，得0-1.9分。</td><td>，8</td></tr><tr data-case='wenling_video:p19:1:r11'><td class='mark'></td><td>7</td><td>服务方案</td><td>根据投标人提供的日常巡检方案、应急抢修措施流程和预案的全面性、针对性、合理性，以及除基本要求的巡检内容外增加的额外巡检范围及周期等作综合评分。提供方案内容详实全面、针对性及合理性强，且额外巡检范围及周期完全满足或优于项目需求的，得7-10分；提供方案内容较详实、针对性及合理性一般，额外巡检范围及周期基本满足项目需求的，得4-6.9分；提供方案内容简单且无实质性内容，且额外巡检范围及周期承诺较差的，不能完</td><td>10</td></tr><tr data-case='wenling_video:p19:1:r12'><td class='mark'></td><td></td><td></td><td>全满足项目需求的得0-3.9分。</td><td></td></tr><tr data-case='wenling_video:p19:1:r13'><td class='mark'></td><td>8</td><td>总分</td><td></td><td>50</td></tr></tbody>
+  </table>
+</section>
+<div class="hint">判据：这一行真实存在 · 文字与页面对得上 · 合并关系对得上（竖跨几行、横跨几列）。
+`t006` 是单行表；`t008` 是跨页表，注意 p34 开头那行是重复表头还是数据行。</div>
+<script>
+const state = {};   // caseId -> 0 未核 / 1 确认 / 2 有问题
+function paint() {
+  let ok = 0, bad = 0, left = 0;
+  document.querySelectorAll('tr[data-case]').forEach(tr => {
+    const s = state[tr.dataset.case] || 0;
+    tr.classList.remove('ok', 'bad');
+    if (s === 1) { tr.classList.add('ok'); ok++; }
+    else if (s === 2) { tr.classList.add('bad'); bad++; }
+    else left++;
+  });
+  document.getElementById('done').textContent = ok;
+  document.getElementById('badcount').textContent = bad;
+  document.getElementById('left').textContent = left;
+  const bads = Object.entries(state).filter(([, v]) => v === 2).map(([k]) => k);
+  document.getElementById('issues').textContent = bads.length ? '有问题：' + bads.join('、') : '';
+}
+document.addEventListener('click', e => {
+  const mark = e.target.closest('td.mark');
+  if (!mark) return;
+  const id = mark.parentElement.dataset.case;
+  state[id] = ((state[id] || 0) + 1) % 3;
+  paint();
+});
+paint();
+</script>

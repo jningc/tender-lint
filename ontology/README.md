@@ -46,7 +46,7 @@ python ontology/consistency.py
 
 `check.py` 只做三件事：能否解析、类/属性/实例计数、有没有用了没定义的类或漏 domain/range 的属性。
 
-`consistency.py` 查的是「用对没对」：实例有没有越界用属性（例：`Bond` 用 `cites`）、契约的六种条款类型能不能落到本体类、四个判定值是否与 `tl:VerdictKind` 逐字一致、`bbox` 有没有被建模并被实例使用。**有违规 exit 1**，`pytest tests/test_ontology.py` 也会跑它。
+`consistency.py` 查的是「用对没对」：实例有没有越界用属性（例：`Bond` 用 `cites`）、契约的六种条款类型能不能落到本体类、四个判定值是否与 `tl:VerdictKind` 逐字一致、`bbox` 有没有被建模并被实例使用。**有违规 exit 1**，`pytest tests/pipeline/test_ontology.py` 也会跑它。
 
 ## 边界
 

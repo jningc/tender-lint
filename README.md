@@ -95,11 +95,15 @@ data/                运行时索引和上传缓存（不进 Git）
 
 ## 评测
 
+目录索引见 [`eval/README.md`](eval/README.md)（门禁 / Agent / 专项 / 演示 / 快照已分文件夹）。
+
 `eval/questions.json` 是人工对着 PDF 原文核过页码的题集（22 条，三份样本各 6–9 条，含负例），
 `eval/compare.py` 拿一次 check 的文本输出直接打分，不调模型：
 
 ```bash
 python eval/compare.py data/step_output/beijing_road/04_check.txt -v
+# 改行为后的硬门禁
+python eval/run_regression.py --engine v2
 ```
 
 它报三个数：抽到了没（absent）、出处对不对（miss）、全对（hit）。
